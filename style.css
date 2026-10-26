@@ -4,3 +4,56 @@
 @media(max-width:1350px){.app-shell{grid-template-columns:245px minmax(0,1fr)}.main-area{padding:18px}.metric-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.cashflow-grid{grid-template-columns:1.2fr 1fr}.savings-preview{grid-column:1/-1}.savings-preview-list{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}}
 @media(max-width:950px){.app-shell{grid-template-columns:205px minmax(0,1fr)}.sidebar{padding:18px 11px}.brand{padding:5px 5px 20px}.brand-title{font-size:18px}.side-link{padding:12px 9px;font-size:13px}.cashflow-grid{grid-template-columns:1fr}.savings-preview{grid-column:auto}.lower-grid{grid-template-columns:1fr}.category-chart{justify-content:flex-start}.welcome-bar{padding:20px}.date-chip{padding:10px}.entry-form{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:700px){.app-shell{grid-template-columns:1fr}.sidebar{position:relative;height:auto;min-height:0;padding:13px;overflow:visible}.brand{padding:4px 5px 13px}.side-nav{display:flex;overflow-x:auto;gap:6px;padding-bottom:4px}.side-link{white-space:nowrap;flex:0 0 auto;padding:10px 12px}.account-card{margin-top:10px;grid-template-columns:32px 1fr;max-width:none}.account-avatar{width:32px;height:32px}.sidebar-footer{display:none}.main-area{padding:12px}.welcome-bar{align-items:flex-start;flex-direction:column;padding:18px}.toolbar{align-items:flex-start;flex-direction:column}.toolbar-actions{width:100%;flex-wrap:wrap}.month-control{flex:1}.metric-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.metric{padding:12px 10px;gap:8px}.metric-icon{width:35px;height:35px;flex-basis:35px;font-size:18px}.metric span{font-size:10px}.metric strong{font-size:17px}.metric small{font-size:10px}.content-panel{padding:13px}.cashflow-card,.data-card{padding:12px}.category-chart{gap:12px}.donut{width:115px;height:115px;flex-basis:115px}.donut:after{inset:25px;font-size:11px}.savings-preview-list{grid-template-columns:1fr}.entry-form{grid-template-columns:1fr;padding:13px}.wide-field{grid-column:1}.login-panel{grid-template-columns:1fr;padding:17px}.date-chip{width:100%}.budget-summary{grid-template-columns:1fr 1fr}}
+
+/* Added: readable finance amounts and per-screen totals; original styling retained */
+.metric { align-items:center; }
+.metric > div:last-child { min-width:0; flex:1 1 auto; }
+.metric strong {
+  white-space:nowrap;
+  overflow-wrap:normal;
+  word-break:normal;
+  font-size:clamp(12px, 1.12vw, 20px);
+  line-height:1.35;
+  letter-spacing:-0.45px;
+  font-variant-numeric:tabular-nums;
+  max-width:100%;
+}
+td.amount, .section-total strong, .saving-row-head b, .budget-item strong {
+  white-space:nowrap;
+  overflow-wrap:normal;
+  word-break:normal;
+  font-variant-numeric:tabular-nums;
+}
+.section-total-grid {
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:12px;
+  margin:0 0 16px;
+}
+.section-total {
+  min-width:0;
+  border:1px solid #f0d8cc;
+  border-radius:13px;
+  padding:15px 16px;
+  background:linear-gradient(135deg,#fffaf7,#fff);
+}
+.section-total span, .section-total small {display:block;color:#79665d}
+.section-total span {font-size:12px;font-weight:700}
+.section-total strong {
+  display:block;
+  color:#35190f;
+  font-family:Manrope,sans-serif;
+  font-size:clamp(15px,1.45vw,23px);
+  line-height:1.45;
+  margin:5px 0;
+}
+.section-total small {font-size:11px}
+@media(max-width:950px) {
+  .metric strong {font-size:clamp(13px,2vw,19px)}
+}
+@media(max-width:700px) {
+  .metric strong {font-size:clamp(12px,3.2vw,17px)}
+  .section-total-grid {grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .section-total {padding:12px}
+  .section-total strong {font-size:clamp(14px,3.4vw,19px)}
+}

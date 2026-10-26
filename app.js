@@ -24,7 +24,7 @@ const auth = app ? getAuth(app) : null;
 const db = app ? getFirestore(app) : null;
 let currentUser = null;
 let transactions = [], commitments = [], savings = [], insurances = [];
-const currency = n => new Intl.NumberFormat("en-IN",{style:"currency",currency:"INR",maximumFractionDigits:2}).format(Number(n)||0);
+const currency = n => new Intl.NumberFormat("en-IN",{style:"currency",currency:"INR",minimumFractionDigits:0,maximumFractionDigits:0}).format(Number(n)||0);
 const today = () => new Date().toLocaleDateString("en-CA");
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const message = (id, text, error=false) => setMessage(id, text, error);
@@ -86,7 +86,32 @@ function renderTypeLists(){
   $("incomeBody").innerHTML=income.map(t=>`<tr><td>${showDate(t.date)}</td><td>${esc(t.category)}</td><td class="amount">${currency(t.amount)}</td><td>${esc([t.account,t.notes].filter(Boolean).join(" · ")||"—")}</td><td><button class="mini-btn" data-edit-tx="${esc(t.id)}">Edit</button><button class="mini-btn delete" data-delete-tx="${esc(t.id)}">Delete</button></td></tr>`).join("")||'<tr><td colspan="5">No income entries yet.</td></tr>';
   $("expensesBody").innerHTML=expenses.map(t=>`<tr><td>${showDate(t.date)}</td><td>${esc(t.category)}</td><td class="amount">${currency(t.amount)}</td><td>${esc(t.method||"—")}</td><td>${esc([t.account,t.notes].filter(Boolean).join(" · ")||"—")}</td><td><button class="mini-btn" data-edit-tx="${esc(t.id)}">Edit</button><button class="mini-btn delete" data-delete-tx="${esc(t.id)}">Delete</button></td></tr>`).join("")||'<tr><td colspan="6">No expense entries yet.</td></tr>';
 }
-function renderAll(){renderDashboard();renderTransactions();renderCommitments();renderSavings();renderInsurances();renderOverview();renderTypeLists();renderChartsAndPanels();}
+function renderSectionTotals(){
+  const sumType=(type,list=transactions)=>list.filter(t=>t.type===type).reduce((a,t)=>a+Number(t.amount||0),0);
+  const monthList=selectedTransactions();
+  const set=(id,value)=>setText(id,value);
+  set("incomeScreenTotal",currency(sumType("income")));
+  set("incomeScreenMonthTotal",currency(sumType("income",monthList)));
+  set("incomeScreenCount",transactions.filter(t=>t.type==="income").length.toLocaleString("en-IN"));
+  set("expenseScreenTotal",currency(sumType("expense")));
+  set("expenseScreenMonthTotal",currency(sumType("expense",monthList)));
+  set("expenseScreenCount",transactions.filter(t=>t.type==="expense").length.toLocaleString("en-IN"));
+  set("dailyEntryCount",transactions.length.toLocaleString("en-IN"));
+  set("dailyIncomeTotal",currency(sumType("income")));
+  set("dailyExpenseTotal",currency(sumType("expense")));
+  set("dailySavingEmiTotal",currency(sumType("saving")+sumType("emi")));
+  const activeLoans=commitments.filter(c=>c.status==="active");
+  set("emiScreenMonthlyTotal",currency(activeLoans.reduce((a,c)=>a+Number(c.monthly||0),0)));
+  set("emiScreenOutstandingTotal",currency(activeLoans.reduce((a,c)=>a+Number(c.outstanding||0),0)));
+  set("emiScreenCount",activeLoans.length.toLocaleString("en-IN"));
+  set("savingsScreenCurrentTotal",currency(savings.reduce((a,s)=>a+Number(s.current||0),0)));
+  set("savingsScreenContributionTotal",currency(savings.reduce((a,s)=>a+Number(s.contribution||0),0)));
+  set("savingsScreenTargetTotal",currency(savings.reduce((a,s)=>a+Number(s.target||0),0)));
+  set("insuranceScreenPremiumTotal",currency(insurances.reduce((a,i)=>a+Number(i.premium||0),0)));
+  set("insuranceScreenCoverageTotal",currency(insurances.reduce((a,i)=>a+Number(i.coverage||0),0)));
+  set("insuranceScreenActiveCount",insurances.filter(i=>i.status==="active").length.toLocaleString("en-IN"));
+}
+function renderAll(){renderDashboard();renderTransactions();renderCommitments();renderSavings();renderInsurances();renderOverview();renderTypeLists();renderChartsAndPanels();renderSectionTotals();}
 
 function renderChartsAndPanels(){
   const list=selectedTransactions();
@@ -153,7 +178,7 @@ $("commitmentForm").addEventListener("submit",async e=>{e.preventDefault();try{c
 $("savingForm").addEventListener("submit",async e=>{e.preventDefault();try{const id=formVal("savingId");await saveRecord("savings",id,{name:formVal("sName"),provider:formVal("sProvider"),frequency:formVal("sFrequency"),contribution:Number(formVal("sContribution")),current:Number(formVal("sCurrent")),target:Number(formVal("sTarget")),start:formVal("sStart"),maturity:formVal("sMaturity")});clearSavingForm();await loadAll();message("appMessage","Savings scheme saved.");}catch(err){message("appMessage",(err.code ? err.code + ": " : "") + err.message,true);}});
 $("insuranceForm").addEventListener("submit",async e=>{e.preventDefault();try{const id=formVal("insuranceId");await saveRecord("insurances",id,{name:formVal("iName"),type:formVal("iType"),company:formVal("iCompany"),policy:formVal("iPolicy"),premium:Number(formVal("iPremium")),frequency:formVal("iFrequency"),coverage:Number(formVal("iCoverage")),renewal:formVal("iRenewal"),status:formVal("iStatus"),notes:formVal("iNotes")});clearInsuranceForm();await loadAll();message("appMessage","Insurance policy saved.");}catch(err){message("appMessage",(err.code ? err.code + ": " : "") + err.message,true);}});
 $("cancelTxBtn").addEventListener("click",clearTxForm);$("cancelCommitmentBtn").addEventListener("click",clearCommitmentForm);$("cancelSavingBtn").addEventListener("click",clearSavingForm);$("cancelInsuranceBtn").addEventListener("click",clearInsuranceForm);
-$("monthFilter").addEventListener("change",()=>{renderDashboard();renderOverview();renderChartsAndPanels();});$("txSearch").addEventListener("input",renderTransactions);
+$("monthFilter").addEventListener("change",()=>{renderDashboard();renderOverview();renderChartsAndPanels();renderSectionTotals();});$("txSearch").addEventListener("input",renderTransactions);
 function showSection(tab){
   document.querySelectorAll(".side-link").forEach(b=>b.classList.toggle("active",b.dataset.tab===tab));
   document.querySelectorAll(".tab-panel").forEach(p=>p.classList.toggle("hidden",p.id!==`tab-${tab}`));

@@ -79,14 +79,17 @@
 
           <section id="tab-income" class="content-panel tab-panel hidden">
             <div class="panel-heading"><div><h2>Income</h2><p>Salary, business income and other money received.</p></div></div>
+            <div class="section-total-grid"><article class="section-total"><span>Total Income</span><strong id="incomeScreenTotal">₹0</strong><small>All saved income entries</small></article><article class="section-total"><span>This Month</span><strong id="incomeScreenMonthTotal">₹0</strong><small>Selected dashboard month</small></article><article class="section-total"><span>Entries</span><strong id="incomeScreenCount">0</strong><small>Income records</small></article></div>
             <div class="data-card"><div class="table-wrap"><table><thead><tr><th>Date</th><th>Category</th><th>Amount</th><th>Method</th><th>Account / notes</th><th>Actions</th></tr></thead><tbody id="incomeBody"></tbody></table></div></div>
           </section>
           <section id="tab-expenses" class="content-panel tab-panel hidden">
             <div class="panel-heading"><div><h2>Expenses</h2><p>Household bills, groceries, shopping and other spending.</p></div></div>
+            <div class="section-total-grid"><article class="section-total"><span>Total Expenses</span><strong id="expenseScreenTotal">₹0</strong><small>All saved expense entries</small></article><article class="section-total"><span>This Month</span><strong id="expenseScreenMonthTotal">₹0</strong><small>Selected dashboard month</small></article><article class="section-total"><span>Entries</span><strong id="expenseScreenCount">0</strong><small>Expense records</small></article></div>
             <div class="data-card"><div class="table-wrap"><table><thead><tr><th>Date</th><th>Category</th><th>Amount</th><th>Method</th><th>Account / notes</th><th>Actions</th></tr></thead><tbody id="expensesBody"></tbody></table></div></div>
           </section>
           <section id="tab-entries" class="content-panel tab-panel hidden">
             <div class="panel-heading"><div><h2>Daily Entries</h2><p>Add and manage income, expenses, savings contributions and EMI payments.</p></div></div>
+            <div class="section-total-grid"><article class="section-total"><span>All Daily Entries</span><strong id="dailyEntryCount">0</strong><small>Saved transaction records</small></article><article class="section-total"><span>Income Total</span><strong id="dailyIncomeTotal">₹0</strong><small>All income entries</small></article><article class="section-total"><span>Expense Total</span><strong id="dailyExpenseTotal">₹0</strong><small>All expense entries</small></article><article class="section-total"><span>Savings + EMI</span><strong id="dailySavingEmiTotal">₹0</strong><small>Recorded contributions and payments</small></article></div>
             <form id="transactionForm" class="entry-form">
               <input type="hidden" id="transactionId">
               <label>Date<input id="txDate" type="date" required></label>
@@ -102,6 +105,7 @@
           </section>
           <section id="tab-commitments" class="content-panel tab-panel hidden">
             <div class="panel-heading"><div><h2>EMI & Loans</h2><p>Track monthly EMI, outstanding balance and next due date.</p></div></div>
+            <div class="section-total-grid"><article class="section-total"><span>Monthly EMI Total</span><strong id="emiScreenMonthlyTotal">₹0</strong><small>Active loans only</small></article><article class="section-total"><span>Outstanding Loan</span><strong id="emiScreenOutstandingTotal">₹0</strong><small>Active outstanding balances</small></article><article class="section-total"><span>Loan / EMI Count</span><strong id="emiScreenCount">0</strong><small>Active commitments</small></article></div>
             <form id="commitmentForm" class="entry-form">
               <input type="hidden" id="commitmentId">
               <label>Loan / EMI name<input id="cName" required placeholder="HDFC personal loan"></label><label>Lender<input id="cLender" placeholder="Bank / lender"></label>
@@ -113,6 +117,7 @@
           </section>
           <section id="tab-savings" class="content-panel tab-panel hidden">
             <div class="panel-heading"><div><h2>Savings Schemes</h2><p>Track your savings, investments, contribution and maturity.</p></div></div>
+            <div class="section-total-grid"><article class="section-total"><span>Total Saved</span><strong id="savingsScreenCurrentTotal">₹0</strong><small>Current saved amounts</small></article><article class="section-total"><span>Total Contributions</span><strong id="savingsScreenContributionTotal">₹0</strong><small>Planned per contribution period</small></article><article class="section-total"><span>Total Target</span><strong id="savingsScreenTargetTotal">₹0</strong><small>Combined savings targets</small></article></div>
             <form id="savingForm" class="entry-form">
               <input type="hidden" id="savingId">
               <label>Scheme name<input id="sName" required placeholder="Post Office RD, Gold savings..."></label><label>Provider / bank<input id="sProvider" placeholder="Post Office / bank"></label>
@@ -125,6 +130,7 @@
           </section>
           <section id="tab-insurance" class="content-panel tab-panel hidden">
             <div class="panel-heading"><div><h2>Insurance Policies</h2><p>Medical, health, life, term life, vehicle and other policies.</p></div></div>
+            <div class="section-total-grid"><article class="section-total"><span>Total Premiums</span><strong id="insuranceScreenPremiumTotal">₹0</strong><small>All saved policies</small></article><article class="section-total"><span>Total Coverage</span><strong id="insuranceScreenCoverageTotal">₹0</strong><small>All saved policies</small></article><article class="section-total"><span>Active Policies</span><strong id="insuranceScreenActiveCount">0</strong><small>Currently active</small></article></div>
             <form id="insuranceForm" class="entry-form">
               <input type="hidden" id="insuranceId">
               <label>Policy name<input id="iName" required placeholder="Family health insurance"></label><label>Insurance type<select id="iType"><option>Medical / Health</option><option>Life</option><option>Term Life</option><option>Vehicle</option><option>Personal accident</option><option>Other</option></select></label>
