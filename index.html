@@ -8,7 +8,16 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="app-shell">
+  <section id="authScreen" class="auth-screen"><div id="loginPanel" class="login-panel">
+        <div class="login-copy"><span class="eyebrow">PRIVATE FAMILY WORKSPACE</span><h2>Your money. One clear view.</h2><p>Sign in to sync your entries across mobile and desktop using your own Firebase project.</p></div>
+        <form id="authForm" class="login-form">
+          <label>Email<input id="email" type="email" autocomplete="username" required placeholder="you@example.com"></label>
+          <label>Password<input id="password" type="password" autocomplete="current-password" minlength="6" required placeholder="At least 6 characters"></label>
+          <div class="form-actions"><button class="primary-btn" type="submit" id="loginBtn">Sign In</button><button class="soft-btn" type="button" id="registerBtn">Create Account</button></div>
+          <p id="authMessage" class="message" role="status"></p>
+        </form>
+  </div></section>
+  <div id="appShell" class="app-shell hidden">
     <aside class="sidebar">
       <div class="brand">
         <div class="brand-mark">◈</div>
@@ -40,16 +49,6 @@
         <div class="date-chip"><span class="calendar-icon">▦</span><div><small id="todayLabel">Today</small><strong id="clockLabel">Your finance overview</strong></div></div>
       </header>
 
-      <section id="loginPanel" class="login-panel">
-        <div class="login-copy"><span class="eyebrow">PRIVATE FAMILY WORKSPACE</span><h2>Your money. One clear view.</h2><p>Sign in to sync your entries across mobile and desktop using your own Firebase project.</p></div>
-        <form id="authForm" class="login-form">
-          <label>Email<input id="email" type="email" autocomplete="username" required placeholder="you@example.com"></label>
-          <label>Password<input id="password" type="password" autocomplete="current-password" minlength="6" required placeholder="At least 6 characters"></label>
-          <div class="form-actions"><button class="primary-btn" type="submit" id="loginBtn">Sign In</button><button class="soft-btn" type="button" id="registerBtn">Create Account</button></div>
-          <p id="authMessage" class="message" role="status"></p>
-        </form>
-      </section>
-
       <section id="appPanel" class="hidden">
         <div class="workspace">
           <section id="tab-dashboard" class="content-panel tab-panel">
@@ -69,6 +68,7 @@
               <div class="cashflow-card"><div class="cashflow-top"><span>Expense Category</span><span class="chart-subtitle">This month</span></div><div id="categoryChart" class="category-chart"><div class="chart-empty">Expense breakdown appears here.</div></div></div>
               <div class="cashflow-card savings-preview"><div class="cashflow-top"><span>Savings & Investments</span><button class="text-link" data-go="savings">View all ↗</button></div><div id="savingsPreview" class="savings-preview-list"><div class="chart-empty">Add your savings schemes to view progress.</div></div></div>
             </div>
+            <div class="data-card payment-method-panel"><div class="panel-heading"><div><h2>💳 Spending by Payment Method</h2><p>UPI, cash, credit card and other methods for the selected period.</p></div></div><div id="paymentMethodSummary" class="budget-summary"></div></div>
             <div class="lower-grid">
               <div class="data-card"><div class="panel-heading"><div><h2>Recent Transactions</h2><p>Latest entries from your finance tracker.</p></div><button class="outline-btn" data-go="entries">View All</button></div><div class="table-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Category</th><th>Amount</th><th>Method</th><th>Notes</th></tr></thead><tbody id="recentTransactionsBody"></tbody></table></div></div>
               <div class="data-card"><div class="panel-heading"><div><h2>EMI & Loans</h2><p>Active commitments</p></div><button class="outline-btn" data-go="commitments">View All</button></div><div class="table-wrap"><table><thead><tr><th>Loan / EMI</th><th>Monthly</th><th>Outstanding</th><th>Next Due</th><th>Status</th></tr></thead><tbody id="dashboardCommitmentsBody"></tbody></table></div></div>

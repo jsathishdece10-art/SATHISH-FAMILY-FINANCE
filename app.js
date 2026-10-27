@@ -37,7 +37,7 @@ function clearCommitmentForm(){ $("commitmentForm").reset(); $("commitmentId").v
 function clearSavingForm(){ $("savingForm").reset(); $("savingId").value=""; $("sCurrent").value="0"; $("sTarget").value="0"; $("cancelSavingBtn").classList.add("hidden"); }
 function clearInsuranceForm(){ $("insuranceForm").reset(); $("insuranceId").value=""; $("iCoverage").value="0"; $("cancelInsuranceBtn").classList.add("hidden"); }
 function monthOptions(){
-  const select=$("monthFilter"), now=new Date(); select.innerHTML="";
+  const select=$("monthFilter"), now=new Date(); select.innerHTML=""; const all=document.createElement("option"); all.value="all"; all.textContent="All Months — Overall Summary"; select.append(all);
   for(let i=0;i<24;i++){ const d=new Date(now.getFullYear(),now.getMonth()-i,1); const val=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; const opt=document.createElement("option"); opt.value=val; opt.textContent=d.toLocaleDateString("en-IN",{month:"long",year:"numeric"}); select.append(opt); }
 }
 async function loadAll(){
@@ -53,7 +53,7 @@ async function loadAll(){
 }
 function selectedTransactions(){
   const month=$("monthFilter").value;
-  return transactions.filter(t=>(t.date||"").slice(0,7)===month);
+  return month==="all" ? [...transactions] : transactions.filter(t=>(t.date||"").slice(0,7)===month);
 }
 function renderDashboard(){
   const list=selectedTransactions();
@@ -119,7 +119,22 @@ function renderChartsAndPanels(){
   const expenses=list.filter(t=>t.type==="expense").reduce((a,t)=>a+Number(t.amount||0),0);
   const max=Math.max(incomes,expenses,1);
   const chart=$("cashflowChart");
-  if(chart) chart.innerHTML=`<div class="chart-month"><div class="chart-bars"><div class="chart-bar income" style="height:${Math.max(3,incomes/max*100)}%"></div><div class="chart-bar expense" style="height:${Math.max(3,expenses/max*100)}%"></div></div><small>${esc($("monthFilter").selectedOptions[0]?.textContent||"Selected")}</small></div>`;
+  if(chart) chart.innerHTML=`
+  <div class="chart-month">
+    <div class="chart-bars">
+      <div class="chart-bar income"
+        title="Income: ${currency(incomes)}"
+        aria-label="Income: ${currency(incomes)}"
+        style="height:${Math.max(3,incomes/max*100)}%">
+      </div>
+      <div class="chart-bar expense"
+        title="Expenses: ${currency(expenses)}"
+        aria-label="Expenses: ${currency(expenses)}"
+        style="height:${Math.max(3,expenses/max*100)}%">
+      </div>
+    </div>
+    <small>${esc($("monthFilter").selectedOptions[0]?.textContent||"Selected")}</small>
+  </div>`;
   const totals={};
   list.filter(t=>t.type==="expense").forEach(t=>totals[t.category||"Other"]=(totals[t.category||"Other"]||0)+Number(t.amount||0));
   const pairs=Object.entries(totals).sort((a,b)=>b[1]-a[1]);
@@ -139,9 +154,66 @@ function renderChartsAndPanels(){
   if(ib) ib.innerHTML=insurances.filter(i=>i.status==="active").slice(0,4).map(i=>`<tr><td>${esc(i.name)}</td><td>${esc(i.company)}</td><td>${currency(i.premium)}</td><td>${currency(i.coverage)}</td><td>${showDate(i.renewal)}</td><td><span class="pill">${esc(i.status)}</span></td></tr>`).join("")||'<tr><td colspan="6">No active policies.</td></tr>';
   const due=$("dashboardDueBody");
   if(due) due.innerHTML=commitments.filter(c=>c.status==="active"&&c.due).sort((a,b)=>a.due.localeCompare(b.due)).slice(0,5).map(c=>`<tr><td>${showDate(c.due)}</td><td>${esc(c.name)}</td><td>${currency(c.monthly)}</td><td><span class="pill">Pending</span></td></tr>`).join("")||'<tr><td colspan="4">No upcoming due dates.</td></tr>';
+  const methods=$("paymentMethodSummary");
+  if(methods) {
+    const byMethod={};
+    list.filter(t=>t.type==="expense").forEach(t=>{const m=t.method||"Other";byMethod[m]=(byMethod[m]||0)+Number(t.amount||0);});
+    const methodPairs=Object.entries(byMethod).sort((a,b)=>b[1]-a[1]);
+    methods.innerHTML = methodPairs.map(([name, total]) => `
+  <div class="budget-item payment-method-card"
+       data-payment-method="${esc(name)}"
+       role="button"
+       tabindex="0"
+       aria-expanded="false">
+    <span>💳 ${esc(name)}</span>
+    <strong>${currency(total)}</strong>
+    <span>${sum ? Math.round(total / sum * 100) : 0}% of expenses</span>
+    <div class="payment-method-details hidden"></div>
+  </div>
+`).join("") || '<p class="chart-empty">No expense payment methods for this period.</p>';
+  }
   const budget=$("budgetSummary");
-  if(budget) budget.innerHTML=pairs.map(p=>`<div class="budget-item"><span>${esc(p[0])}</span><strong>${currency(p[1])}</strong><span>${sum?Math.round(p[1]/sum*100):0}% of expenses this month</span></div>`).join("")||'<p class="chart-empty">Add expense entries to see category totals.</p>';
+  if(budget) budget.innerHTML=pairs.map(p=>`<div class="budget-item budget-clickable" tabindex="0" role="button" data-budget-category="${esc(p[0])}" aria-expanded="false"><span>${/shop/i.test(p[0])?"🛒":/grocer/i.test(p[0])?"🛍️":"📊"} ${esc(p[0])}</span><strong>${currency(p[1])}</strong><span>${sum?Math.round(p[1]/sum*100):0}% of expenses · Click to view details</span><div class="budget-details hidden"></div></div>`).join("")||'<p class="chart-empty">Add expense entries to see category totals.</p>';
 }
+$("paymentMethodSummary").addEventListener("click", e => {
+  const card = e.target.closest(".payment-method-card");
+  if (!card) return;
+
+  const details = card.querySelector(".payment-method-details");
+  const isOpen = !details.classList.contains("hidden");
+
+  if (isOpen) {
+    details.classList.add("hidden");
+    card.setAttribute("aria-expanded", "false");
+    return;
+  }
+
+  $("paymentMethodSummary")
+    .querySelectorAll(".payment-method-card")
+    .forEach(item => {
+      item.querySelector(".payment-method-details")
+        .classList.add("hidden");
+      item.setAttribute("aria-expanded", "false");
+    });
+
+  const method = card.dataset.paymentMethod;
+
+  const items = selectedTransactions().filter(t =>
+    t.type === "expense" && t.method === method
+  );
+
+  details.innerHTML = items.length
+    ? items.map(t => `
+        <div class="payment-detail-row">
+          <span>${esc(t.date || "—")} · ${esc(t.category || "Other")}</span>
+          <strong>${currency(t.amount)}</strong>
+        </div>
+      `).join("")
+    : "<p>No transactions found.</p>";
+
+  details.classList.remove("hidden");
+  card.setAttribute("aria-expanded", "true");
+});
 async function saveRecord(collectionName,id,data){
   data.updatedAt=serverTimestamp();
   if(id) await updateDoc(doc(db,"users",currentUser.uid,collectionName,id),data);
@@ -156,7 +228,7 @@ $("authForm").addEventListener("submit",async e=>{e.preventDefault(); if(!config
 $("registerBtn").addEventListener("click",async()=>{if(!configReady){message("authMessage","First add your NEW Firebase project config in app.js. See README.txt.",true);return;}try{await createUserWithEmailAndPassword(auth,formVal("email"),$("password").value);message("authMessage","Account created.");}catch(err){message("authMessage",err.message,true);}});
 $("signOutBtn").addEventListener("click",()=>signOut(auth));
 onAuthStateChanged(auth,async user=>{
-  currentUser=user; $("loginPanel").classList.toggle("hidden",!!user); $("appPanel").classList.toggle("hidden",!user); $("signOutBtn").classList.toggle("hidden",!user); setText("userLabel", user ? user.email : "Not signed in"); setText("sidebarEmail", user ? user.email : "Your account");
+  currentUser=user; $("authScreen").classList.toggle("hidden",!!user); $("appShell").classList.toggle("hidden",!user); $("appPanel").classList.toggle("hidden",!user); $("signOutBtn").classList.toggle("hidden",!user); setText("userLabel", user ? user.email : "Not signed in"); setText("sidebarEmail", user ? user.email : "Your account");
   if (user) {
     try {
       await loadAll();
@@ -173,12 +245,34 @@ onAuthStateChanged(auth,async user=>{
     }
   }
 });
-$("transactionForm").addEventListener("submit",async e=>{e.preventDefault();const btn=$("saveTxBtn");setBusy(btn,true);try{const id=formVal("transactionId");await saveRecord("transactions",id,{date:formVal("txDate"),type:formVal("txType"),category:formVal("txCategory"),amount:Number(formVal("txAmount")),method:formVal("txMethod"),account:formVal("txAccount"),notes:formVal("txNotes")});clearTxForm();await loadAll();message("appMessage","Transaction saved to cloud.");}catch(err){message("appMessage",(err.code ? err.code + ": " : "") + err.message,true);}finally{setBusy(btn,false,id?"Update entry":"Save entry");}});
+let transactionSaving = false;
+$("transactionForm").addEventListener("submit",async e=>{
+ e.preventDefault(); if(transactionSaving) return;
+ const btn=$("saveTxBtn"), id=formVal("transactionId"); transactionSaving=true; setBusy(btn,true);
+ try {
+   const type=formVal("txType"), amount=Number(formVal("txAmount"));
+   if(type==="saving") {
+     const available=transactions.reduce((a,t)=>a+(t.type==="income"?Number(t.amount||0):t.type==="expense"||t.type==="saving"||t.type==="emi"?-Number(t.amount||0):0),0);
+     if(!id && amount>available){message("appMessage",`Insufficient available balance. Remaining balance: ${currency(available)}.`,true);return;}
+   }
+   await saveRecord("transactions",id,{date:formVal("txDate"),type,category:formVal("txCategory"),amount,method:formVal("txMethod"),account:formVal("txAccount"),notes:formVal("txNotes")});
+   clearTxForm(); await loadAll(); message("appMessage",id?"Transaction updated in cloud.":"Transaction saved to cloud. You can add another entry immediately.");
+ } catch(err){message("appMessage",(err.code ? err.code + ": " : "") + err.message,true);}
+ finally {
+  transactionSaving = false;
+  setBusy(
+    btn,
+    false,
+    $("transactionId").value ? "Update entry" : "Save Entry"
+  );
+}
+});
 $("commitmentForm").addEventListener("submit",async e=>{e.preventDefault();try{const id=formVal("commitmentId");await saveRecord("commitments",id,{name:formVal("cName"),lender:formVal("cLender"),monthly:Number(formVal("cMonthly")),outstanding:Number(formVal("cOutstanding")),due:formVal("cDue"),status:formVal("cStatus"),notes:formVal("cNotes")});clearCommitmentForm();await loadAll();message("appMessage","EMI / loan commitment saved.");}catch(err){message("appMessage",(err.code ? err.code + ": " : "") + err.message,true);}});
 $("savingForm").addEventListener("submit",async e=>{e.preventDefault();try{const id=formVal("savingId");await saveRecord("savings",id,{name:formVal("sName"),provider:formVal("sProvider"),frequency:formVal("sFrequency"),contribution:Number(formVal("sContribution")),current:Number(formVal("sCurrent")),target:Number(formVal("sTarget")),start:formVal("sStart"),maturity:formVal("sMaturity")});clearSavingForm();await loadAll();message("appMessage","Savings scheme saved.");}catch(err){message("appMessage",(err.code ? err.code + ": " : "") + err.message,true);}});
 $("insuranceForm").addEventListener("submit",async e=>{e.preventDefault();try{const id=formVal("insuranceId");await saveRecord("insurances",id,{name:formVal("iName"),type:formVal("iType"),company:formVal("iCompany"),policy:formVal("iPolicy"),premium:Number(formVal("iPremium")),frequency:formVal("iFrequency"),coverage:Number(formVal("iCoverage")),renewal:formVal("iRenewal"),status:formVal("iStatus"),notes:formVal("iNotes")});clearInsuranceForm();await loadAll();message("appMessage","Insurance policy saved.");}catch(err){message("appMessage",(err.code ? err.code + ": " : "") + err.message,true);}});
 $("cancelTxBtn").addEventListener("click",clearTxForm);$("cancelCommitmentBtn").addEventListener("click",clearCommitmentForm);$("cancelSavingBtn").addEventListener("click",clearSavingForm);$("cancelInsuranceBtn").addEventListener("click",clearInsuranceForm);
-$("monthFilter").addEventListener("change",()=>{renderDashboard();renderOverview();renderChartsAndPanels();renderSectionTotals();});$("txSearch").addEventListener("input",renderTransactions);
+$("monthFilter").addEventListener("change",()=>{renderDashboard();renderOverview();renderChartsAndPanels();renderSectionTotals();});$("txSearch").addEventListener("input",renderTransactions);$("budgetSummary").addEventListener("click",e=>{const item=e.target.closest("[data-budget-category]");if(!item)return;const details=item.querySelector(".budget-details");const open=details.classList.contains("hidden");details.classList.toggle("hidden",!open);item.setAttribute("aria-expanded",String(open));if(open){const cat=item.dataset.budgetCategory;const list=selectedTransactions().filter(t=>t.type==="expense"&&(t.category||"Other")===cat).sort((a,b)=>(b.date||"").localeCompare(a.date||""));details.innerHTML=list.map(t=>`<div class="budget-detail-row"><span>${showDate(t.date)} · ${esc(t.method||"—")}</span><b>${currency(t.amount)}</b></div>`).join("")||"<small>No details</small>";}});
+
 function showSection(tab){
   document.querySelectorAll(".side-link").forEach(b=>b.classList.toggle("active",b.dataset.tab===tab));
   document.querySelectorAll(".tab-panel").forEach(p=>p.classList.toggle("hidden",p.id!==`tab-${tab}`));

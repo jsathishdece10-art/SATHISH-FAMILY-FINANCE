@@ -57,3 +57,71 @@ td.amount, .section-total strong, .saving-row-head b, .budget-item strong {
   .section-total {padding:12px}
   .section-total strong {font-size:clamp(14px,3.4vw,19px)}
 }
+
+
+/* Requested focused fixes: separate login screen, expandable budgets, payment breakdown */
+.auth-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:linear-gradient(135deg,#fffaf7 0%,#fff0e7 45%,#fff8f4 100%)}
+.auth-screen .login-panel{width:min(100%,1000px);margin:0;box-shadow:0 18px 55px #6e321018}
+.budget-clickable{cursor:pointer;transition:box-shadow .15s,border-color .15s}
+.budget-clickable:hover,.budget-clickable:focus{border-color:#e85a7e;box-shadow:0 5px 16px #d9446e18;outline:none}
+.budget-details{margin-top:12px;padding-top:9px;border-top:1px solid #f0d8cc}
+.budget-detail-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:7px 0;font-size:12px;color:#6e574d;border-bottom:1px dashed #f1ded5}
+.budget-detail-row:last-child{border-bottom:0}
+.budget-detail-row b{white-space:nowrap;color:#35190f}
+.payment-method-panel{margin-bottom:14px}
+.payment-method-panel .budget-summary{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
+@media(max-width:700px){.auth-screen{padding:12px}.auth-screen .login-panel{margin:0}.payment-method-panel .budget-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* Compact payment method cards */
+.payment-method-panel .budget-summary {
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.payment-method-panel .budget-item {
+  padding: 11px 13px;
+  border-radius: 12px;
+}
+
+.payment-method-panel .budget-item strong {
+  font-size: 18px;
+  margin: 5px 0;
+}
+
+.payment-method-panel .budget-item span {
+  font-size: 11px;
+}
+
+.payment-method-panel .budget-item {
+  cursor: pointer;
+}
+.payment-method-card {
+  cursor: pointer;
+  transition: box-shadow .2s ease;
+}
+
+.payment-method-card:hover {
+  box-shadow: 0 4px 14px #35190f14;
+}
+
+.payment-method-details {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #f0d8cc;
+}
+
+.payment-detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 0;
+  font-size: 12px;
+}
+
+.payment-detail-row strong {
+  white-space: nowrap;
+}
+
+.payment-method-details.hidden {
+  display: none !important;
+}
