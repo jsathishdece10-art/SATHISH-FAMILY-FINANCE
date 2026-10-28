@@ -32,6 +32,7 @@
         <button class="side-link" data-tab="savings"><span>♧</span> Savings Schemes</button>
         <button class="side-link" data-tab="insurance"><span>♡</span> Insurance</button>
         <button class="side-link" data-tab="reports"><span>▨</span> Reports</button>
+        <button class="side-link" data-tab="monthly-report"><span>▦</span> Monthly Report</button>
         <button class="side-link" data-tab="budgets"><span>▣</span> Budgets</button>
       </nav>
       <div class="account-card">
@@ -56,7 +57,7 @@
         <section class="metric-grid">
           <article class="metric income-metric"><div class="metric-icon">₹</div><div><span>Total Income</span><strong id="totalIncome">₹0</strong><small>This Month</small></div></article>
           <article class="metric expense-metric"><div class="metric-icon">▰</div><div><span>Total Expenses</span><strong id="totalExpense">₹0</strong><small>This Month</small></div></article>
-          <article class="metric balance-metric"><div class="metric-icon">▥</div><div><span>Balance</span><strong id="balance">₹0</strong><small>Income − Expenses</small></div></article>
+          <article class="metric balance-metric"><div class="metric-icon">▥</div><div><span>Balance</span><strong id="balance">₹0</strong><small>Income − Expenses − EMI − Savings</small></div></article>
           <article class="metric saving-metric"><div class="metric-icon">♧</div><div><span>Savings Added</span><strong id="savingTotal">₹0</strong><small>This Month</small></div></article>
           <article class="metric emi-metric"><div class="metric-icon">▤</div><div><span>EMI Paid</span><strong id="emiPaid">₹0</strong><small>This Month</small></div></article>
           <article class="metric pending-metric"><div class="metric-icon">⌛</div><div><span>EMI Pending</span><strong id="emiPending">₹0</strong><small>Total Outstanding</small></div></article>
@@ -84,7 +85,7 @@
           </section>
           <section id="tab-expenses" class="content-panel tab-panel hidden">
             <div class="panel-heading"><div><h2>Expenses</h2><p>Household bills, groceries, shopping and other spending.</p></div></div>
-            <div class="section-total-grid"><article class="section-total"><span>Total Expenses</span><strong id="expenseScreenTotal">₹0</strong><small>All saved expense entries</small></article><article class="section-total"><span>This Month</span><strong id="expenseScreenMonthTotal">₹0</strong><small>Selected dashboard month</small></article><article class="section-total"><span>Entries</span><strong id="expenseScreenCount">0</strong><small>Expense records</small></article></div>
+            <div class="section-total-grid"><article class="section-total"><span>Total Expenses</span><strong id="expenseScreenTotal">₹0</strong><small>Expenses including EMI paid</small></article><article class="section-total"><span>This Month</span><strong id="expenseScreenMonthTotal">₹0</strong><small>Selected month including EMI paid</small></article><article class="section-total"><span>Entries</span><strong id="expenseScreenCount">0</strong><small>Expense records</small></article></div>
             <div class="data-card"><div class="table-wrap"><table><thead><tr><th>Date</th><th>Category</th><th>Amount</th><th>Method</th><th>Account / notes</th><th>Actions</th></tr></thead><tbody id="expensesBody"></tbody></table></div></div>
           </section>
           <section id="tab-entries" class="content-panel tab-panel hidden">
@@ -109,11 +110,12 @@
             <form id="commitmentForm" class="entry-form">
               <input type="hidden" id="commitmentId">
               <label>Loan / EMI name<input id="cName" required placeholder="HDFC personal loan"></label><label>Lender<input id="cLender" placeholder="Bank / lender"></label>
-              <label>Monthly EMI (₹)<input id="cMonthly" type="number" min="0" step="0.01" required></label><label>Outstanding balance (₹)<input id="cOutstanding" type="number" min="0" step="0.01" value="0" required></label>
+              <label>Loan total amount (₹)<input id="cTotalAmount" type="number" min="0" step="0.01" placeholder="Original loan amount"></label><label>Monthly EMI (₹)<input id="cMonthly" type="number" min="0" step="0.01" required></label><label>Outstanding balance (₹)<input id="cOutstanding" type="number" min="0" step="0.01" value="0" required></label>
+              <label>Start date<input id="cStart" type="date" required></label><label>Maturity date<input id="cMaturity" type="date" required></label>
               <label>Next due date<input id="cDue" type="date"></label><label>Status<select id="cStatus"><option value="active">Active</option><option value="closed">Closed</option></select></label>
               <label class="wide-field">Notes<input id="cNotes" placeholder="Optional notes"></label><div class="form-actions wide-field"><button class="primary-btn" type="submit">Save Commitment</button><button class="soft-btn hidden" type="button" id="cancelCommitmentBtn">Cancel Edit</button></div>
             </form>
-            <div class="data-card"><div class="table-wrap"><table><thead><tr><th>Name</th><th>Lender</th><th>Monthly EMI</th><th>Outstanding</th><th>Next Due</th><th>Status</th><th>Actions</th></tr></thead><tbody id="commitmentsBody"></tbody></table></div></div>
+            <div class="data-card"><div class="table-wrap"><table><thead><tr><th>Name</th><th>Lender</th><th>Monthly EMI</th><th>Paid amount</th><th>Outstanding</th><th>Balance EMI months</th><th>Start</th><th>Maturity</th><th>Next Due</th><th>Status</th><th>Actions</th></tr></thead><tbody id="commitmentsBody"></tbody></table></div></div>
           </section>
           <section id="tab-savings" class="content-panel tab-panel hidden">
             <div class="panel-heading"><div><h2>Savings Schemes</h2><p>Track your savings, investments, contribution and maturity.</p></div></div>
@@ -123,10 +125,10 @@
               <label>Scheme name<input id="sName" required placeholder="Post Office RD, Gold savings..."></label><label>Provider / bank<input id="sProvider" placeholder="Post Office / bank"></label>
               <label>Contribution frequency<select id="sFrequency"><option>Monthly</option><option>Weekly</option><option>Quarterly</option><option>Yearly</option><option>One-time</option></select></label><label>Contribution amount (₹)<input id="sContribution" type="number" min="0" step="0.01" required></label>
               <label>Current saved amount (₹)<input id="sCurrent" type="number" min="0" step="0.01" value="0" required></label><label>Target amount (₹)<input id="sTarget" type="number" min="0" step="0.01" value="0"></label>
-              <label>Start date<input id="sStart" type="date"></label><label>Maturity / end date<input id="sMaturity" type="date"></label>
+              <label>Start date<input id="sStart" type="date" required></label><label>Maturity / end date<input id="sMaturity" type="date" required></label>
               <div class="form-actions wide-field"><button class="primary-btn" type="submit">Save Scheme</button><button class="soft-btn hidden" type="button" id="cancelSavingBtn">Cancel Edit</button></div>
             </form>
-            <div class="data-card"><div class="table-wrap"><table><thead><tr><th>Scheme</th><th>Provider</th><th>Frequency</th><th>Contribution</th><th>Saved</th><th>Target</th><th>Maturity</th><th>Actions</th></tr></thead><tbody id="savingsBody"></tbody></table></div></div>
+            <div class="data-card"><div class="table-wrap"><table><thead><tr><th>Scheme</th><th>Provider</th><th>Frequency</th><th>Contribution</th><th>Saved</th><th>Target</th><th>Start</th><th>Maturity</th><th>Actions</th></tr></thead><tbody id="savingsBody"></tbody></table></div></div>
           </section>
           <section id="tab-insurance" class="content-panel tab-panel hidden">
             <div class="panel-heading"><div><h2>Insurance Policies</h2><p>Medical, health, life, term life, vehicle and other policies.</p></div></div>
@@ -136,13 +138,23 @@
               <label>Policy name<input id="iName" required placeholder="Family health insurance"></label><label>Insurance type<select id="iType"><option>Medical / Health</option><option>Life</option><option>Term Life</option><option>Vehicle</option><option>Personal accident</option><option>Other</option></select></label>
               <label>Company / insurer<input id="iCompany" required placeholder="Insurance company"></label><label>Policy nickname<input id="iPolicy" placeholder="Optional nickname"></label>
               <label>Premium amount (₹)<input id="iPremium" type="number" min="0" step="0.01" required></label><label>Premium frequency<select id="iFrequency"><option>Yearly</option><option>Half-yearly</option><option>Quarterly</option><option>Monthly</option></select></label>
-              <label>Coverage amount (₹)<input id="iCoverage" type="number" min="0" step="0.01" value="0"></label><label>Next renewal date<input id="iRenewal" type="date" required></label>
+              <label>Coverage amount (₹)<input id="iCoverage" type="number" min="0" step="0.01" value="0"></label><label>Start date<input id="iStart" type="date" required></label><label>Maturity / end date<input id="iMaturity" type="date" required></label><label>Next renewal date<input id="iRenewal" type="date" required></label>
               <label>Status<select id="iStatus"><option value="active">Active</option><option value="expired">Expired</option><option value="cancelled">Cancelled</option></select></label><label class="wide-field">Notes<input id="iNotes" placeholder="Covered family members or reminders"></label>
               <div class="form-actions wide-field"><button class="primary-btn" type="submit">Save Policy</button><button class="soft-btn hidden" type="button" id="cancelInsuranceBtn">Cancel Edit</button></div>
             </form>
-            <div class="data-card"><div class="table-wrap"><table><thead><tr><th>Policy</th><th>Type</th><th>Insurer</th><th>Premium</th><th>Frequency</th><th>Coverage</th><th>Renewal</th><th>Status</th><th>Actions</th></tr></thead><tbody id="insuranceBody"></tbody></table></div></div>
+            <div class="data-card"><div class="table-wrap"><table><thead><tr><th>Policy</th><th>Type</th><th>Insurer</th><th>Premium</th><th>Frequency</th><th>Paid amount</th><th>Balance premium months</th><th>Start</th><th>Maturity</th><th>Coverage</th><th>Renewal</th><th>Status</th><th>Actions</th></tr></thead><tbody id="insuranceBody"></tbody></table></div></div>
           </section>
           <section id="tab-reports" class="content-panel tab-panel hidden"><div class="panel-heading"><div><h2>Reports</h2><p>Export your finance records to CSV for Excel.</p></div><button class="primary-btn" data-export>Export CSV</button></div><div class="report-note">Choose a month at the top to update the dashboard totals. Use Export CSV to download transaction, loan, savings and insurance records.</div></section>
+          <section id="tab-monthly-report" class="content-panel tab-panel hidden">
+            <div class="panel-heading"><div><h2>Monthly Report</h2><p>Open a month to view income, expenses, EMI, savings and carried-forward balance.</p></div></div>
+            <div class="entry-form">
+              <label>Report month<select id="reportMonth"></select></label>
+              <label>Manual opening / carry-forward balance (₹)<input id="manualOpeningBalance" type="number" step="0.01" value="0"></label>
+              <div class="form-actions"><button class="primary-btn" id="saveOpeningBalance" type="button">Save Balance</button></div>
+            </div>
+            <div id="monthlyReportSummary" class="section-total-grid"></div>
+            <div id="monthlyReportDetails" class="data-card"></div>
+          </section>
           <section id="tab-budgets" class="content-panel tab-panel hidden"><div class="panel-heading"><div><h2>Budgets</h2><p>Expense totals grouped by category for the selected month.</p></div></div><div id="budgetSummary" class="budget-summary"></div></section>
         </div>
       <p id="appMessage" class="message app-message" role="status"></p>
