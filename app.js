@@ -25,6 +25,7 @@ const db = app ? getFirestore(app) : null;
 let currentUser = null;
 let transactions = [], commitments = [], savings = [], insurances = [], monthlyBalances = [];
 let openReportMonth = null;
+let openReportDate = null;
 const currency = n => new Intl.NumberFormat("en-IN",{style:"currency",currency:"INR",minimumFractionDigits:0,maximumFractionDigits:0}).format(Number(n)||0);
 const today = () => new Date().toLocaleDateString("en-CA");
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -287,15 +288,31 @@ function fillReportMonths(){
 }
 function renderMonthlyReport(){
   const sel=$("reportMonth"); if(!sel)return;
-  const month=sel.value||today().slice(0,7), rows=transactions.filter(t=>(t.date||"").slice(0,7)===month);
-  const availableMonths=new Set([today().slice(0,7)]);
-  transactions.forEach(t=>{if(t.date)availableMonths.add(t.date.slice(0,7));});
-  monthlyBalances.forEach(b=>{if(b.month)availableMonths.add(b.month);});
-  const monthLabels=[...availableMonths].sort().reverse();
+  const month=sel.value||today().slice(0,7);
+  const rows=transactions.filter(t=>(t.date||"").slice(0,7)===month)
+    .sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+  // Month buttons only represent months that actually contain saved transactions.
+  const monthLabels=[...new Set(transactions
+    .filter(t=>/^\d{4}-\d{2}-\d{2}$/.test(t.date||""))
+    .map(t=>t.date.slice(0,7)))].sort().reverse();
   const listEl=$("monthlyReportList");
-  if(listEl)listEl.innerHTML=monthLabels.map(m=>`<div class="budget-item budget-clickable" role="button" tabindex="0" data-month-card="${m}" aria-expanded="${openReportMonth===m}"><span>📅 ${new Date(m+"-01T00:00:00").toLocaleDateString("en-IN",{month:"long",year:"numeric"})}</span><strong>${openReportMonth===m?"Hide details":"View monthly details"}</strong><span>Click to open / close</span></div>`).join("");
+  if(listEl){
+    listEl.innerHTML=monthLabels.map(m=>{
+      const monthRows=transactions.filter(t=>(t.date||"").slice(0,7)===m);
+      const totalExpense=monthRows.filter(t=>t.type==="expense"||t.type==="emi")
+        .reduce((n,t)=>n+Number(t.amount||0),0);
+      const label=new Date(m+"-01T00:00:00").toLocaleDateString("en-IN",{month:"long",year:"numeric"});
+      return `<button type="button" class="month-report-button ${openReportMonth===m?"active":""}" data-month-card="${m}" aria-expanded="${openReportMonth===m}">
+        <span class="month-report-name">📅 ${esc(label)}</span>
+        <span class="month-report-meta">${monthRows.length} ${monthRows.length===1?"entry":"entries"}</span>
+        <strong>${currency(totalExpense)} expense</strong>
+        <span class="month-report-action">${openReportMonth===m?"Hide details":"View date-wise details"} ↘</span>
+      </button>`;
+    }).join("") || '<p class="chart-empty">No saved transactions yet. Month buttons will appear here after you add entries.</p>';
+  }
   const sum=types=>rows.filter(t=>types.includes(t.type)).reduce((n,t)=>n+Number(t.amount||0),0);
   const income=sum(["income"]), expenses=sum(["expense"]), emi=sum(["emi"]), saving=sum(["saving"]);
+  // Keep the existing monthly carry-forward logic unchanged.
   const months=new Set(transactions.map(t=>(t.date||"").slice(0,7)).filter(m=>/^\d{4}-\d{2}$/.test(m)));
   monthlyBalances.forEach(b=>{if(b.month)months.add(b.month);});
   months.add(month);
@@ -314,14 +331,43 @@ function renderMonthlyReport(){
   const opening=override?Number(override.openingBalance||0):carried;
   const spending=expenses+emi, closing=opening+income-spending-saving;
   $("manualOpeningBalance").value=opening;
-  $("manualOpeningBalance").value=opening;
   $("monthlyReportSummary").classList.toggle("hidden",openReportMonth!==month);
   $("monthlyReportDetails").classList.toggle("hidden",openReportMonth!==month);
   $("monthlyReportSummary").innerHTML=[
     ["Opening / Carry-forward",opening],["Income",income],["Expenses + EMI",spending],["Savings",saving],["Closing Balance",closing]
   ].map(([label,val])=>`<article class="section-total"><span>${label}</span><strong>${currency(val)}</strong><small>${label==="Closing Balance"?"Carried to next month":"Selected month"}</small></article>`).join("");
-  const grouped={}; rows.forEach(t=>{const label=t.type==="emi"?"EMI / Loan":t.type==="saving"?"Savings":t.type==="income"?"Income":(t.category||"Other"); grouped[label]=(grouped[label]||0)+Number(t.amount||0);});
-  $("monthlyReportDetails").innerHTML=`<div class="panel-heading"><div><h3>${new Date(month+"-01T00:00:00").toLocaleDateString("en-IN",{month:"long",year:"numeric"})} details</h3><p>Click a month using the selector to open its report.</p></div></div><div class="table-wrap"><table><thead><tr><th>Category / Type</th><th>Amount</th></tr></thead><tbody>${Object.entries(grouped).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<tr><td>${esc(k)}</td><td class="amount">${currency(v)}</td></tr>`).join("")||'<tr><td colspan="2">No entries for this month.</td></tr>'}</tbody></table></div>`;
+
+  // Group every transaction by date and show daily totals plus the individual entries.
+  const byDate={};
+  rows.forEach(t=>{const d=t.date||"Undated";(byDate[d] ||= []).push(t);});
+  const dateGroups=Object.entries(byDate).sort((a,b)=>b[0].localeCompare(a[0]));
+  const monthLabel=new Date(month+"-01T00:00:00").toLocaleDateString("en-IN",{month:"long",year:"numeric"});
+  // Dates are shown as compact clickable rows. Transaction details expand only
+  // when the user clicks a specific date; this is display-only and reads saved records.
+  const dateHtml=dateGroups.map(([date,items])=>{
+    const dailyIncome=items.filter(t=>t.type==="income").reduce((n,t)=>n+Number(t.amount||0),0);
+    const dailyExpense=items.filter(t=>t.type==="expense").reduce((n,t)=>n+Number(t.amount||0),0);
+    const dailyEmi=items.filter(t=>t.type==="emi").reduce((n,t)=>n+Number(t.amount||0),0);
+    const dailySaving=items.filter(t=>t.type==="saving").reduce((n,t)=>n+Number(t.amount||0),0);
+    const expenseTotal=dailyExpense+dailyEmi;
+    const dateKey=`${month}|${date}`;
+    const expanded=openReportDate===dateKey && openReportMonth===month;
+    return `<section class="daily-report-group ${expanded?"expanded":""}">
+      <button type="button" class="daily-report-toggle" data-date-card="${esc(date)}" aria-expanded="${expanded}">
+        <span class="daily-report-date"><strong>${date==="Undated"?"Date not set":esc(date)}</strong><small>${items.length} ${items.length===1?"entry":"entries"}</small></span>
+        <span class="daily-report-totals"><span>Expense + EMI<strong>${currency(expenseTotal)}</strong></span><span>Income<strong>${currency(dailyIncome)}</strong></span></span>
+        <span class="daily-report-action">${expanded?"Hide entries ↑":"View entries ↓"}</span>
+      </button>
+      <div class="daily-report-content ${expanded?"":"hidden"}">
+        <div class="table-wrap"><table><thead><tr><th>Type</th><th>Category</th><th>Amount</th><th>Method</th><th>Account / Notes</th></tr></thead><tbody>
+        ${items.map(t=>`<tr><td><span class="pill ${esc(t.type)}">${esc(t.type==="emi"?"EMI / Loan":t.type==="saving"?"Savings":t.type)}</span></td><td>${esc(t.category||"—")}</td><td class="amount">${currency(t.amount)}</td><td>${esc(t.method||"—")}</td><td>${esc([t.account,t.notes].filter(Boolean).join(" · ")||"—")}</td></tr>`).join("")}
+        <tr class="daily-subtotal-row"><td colspan="2">Daily totals</td><td class="amount">${currency(expenseTotal)} expense + EMI</td><td colspan="2">Savings: ${currency(dailySaving)} · Income: ${currency(dailyIncome)}</td></tr>
+        </tbody></table></div>
+      </div>
+    </section>`;
+  }).join("");
+  $("monthlyReportDetails").innerHTML=`<div class="panel-heading"><div><h3>${esc(monthLabel)} — Date-wise summary</h3><p>Click any date to expand and see the individual entries for that day.</p></div></div>
+    ${dateHtml||'<p class="chart-empty">No entries saved for this month.</p>'}`;
 }
 async function addLinkedEntry(kind,id){
   try{
@@ -446,8 +492,8 @@ if($("cStart"))$("cStart").value=today();
 if($("iStart"))$("iStart").value=today();
 if($("sStart"))$("sStart").value=today();
 if($("reportMonth")){$("reportMonth").value=today().slice(0,7);$("reportMonth").addEventListener("change",()=>{openReportMonth=$("reportMonth").value;renderMonthlyReport();});}
-if($("monthlyReportList"))$("monthlyReportList").addEventListener("click",e=>{const card=e.target.closest("[data-month-card]");if(!card)return;const m=card.dataset.monthCard;openReportMonth=openReportMonth===m?null:m;if(openReportMonth){$("reportMonth").value=m;}renderMonthlyReport();});
-if($("monthlyReportList"))$("monthlyReportList").addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){const card=e.target.closest("[data-month-card]");if(card){e.preventDefault();card.click();}}});
+if($("monthlyReportList"))$("monthlyReportList").addEventListener("click",e=>{const card=e.target.closest("[data-month-card]");if(!card)return;const m=card.dataset.monthCard;openReportMonth=openReportMonth===m?null:m;openReportDate=null;if(openReportMonth){$("reportMonth").value=m;}renderMonthlyReport();});
+if($("monthlyReportDetails"))$("monthlyReportDetails").addEventListener("click",e=>{const dateButton=e.target.closest("[data-date-card]");if(!dateButton)return;const key=`${$("reportMonth").value}|${dateButton.dataset.dateCard}`;openReportDate=openReportDate===key?null:key;renderMonthlyReport();});
 if($("saveOpeningBalance"))$("saveOpeningBalance").addEventListener("click",async()=>{try{const month=$("reportMonth").value, opening=Number($("manualOpeningBalance").value||0), old=monthlyBalances.find(b=>b.month===month);await saveRecord("monthlyBalances",old?.id||null,{month,openingBalance:opening});await loadAll();fillReportMonths();$("reportMonth").value=month;renderMonthlyReport();message("appMessage","Opening / carry-forward balance saved.");}catch(e){message("appMessage",e.message,true);}});
 
 if(!configReady){message("authMessage","Setup needed: paste the Firebase config for a NEW project into app.js.",true);}

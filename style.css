@@ -125,3 +125,38 @@ td.amount, .section-total strong, .saving-row-head b, .budget-item strong {
 .payment-method-details.hidden {
   display: none !important;
 }
+
+/* Monthly report: month buttons and date-wise transaction groups */
+.month-report-section{margin:0 0 18px;padding:17px;border:1px solid #f0d8cc;border-radius:14px;background:#fffaf7}
+.month-report-heading{margin:0 0 5px;font-family:Georgia,serif;color:#482317;font-size:19px}
+.month-report-help{margin:0 0 13px;color:#88766e;font-size:13px;line-height:1.5}
+.month-report-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(205px,1fr));gap:11px}
+.month-report-button{display:flex;flex-direction:column;align-items:flex-start;gap:7px;text-align:left;width:100%;min-width:0;padding:15px;border:1px solid #f0d8cc;border-radius:12px;background:#fff;color:#442b21;transition:border-color .15s,box-shadow .15s,transform .15s}
+.month-report-button:hover,.month-report-button:focus{border-color:#ed527c;box-shadow:0 5px 16px #d9446e18;outline:none}
+.month-report-button.active{border-color:#ed527c;background:linear-gradient(135deg,#fff0f4,#fffaf7);box-shadow:0 4px 14px #d9446e15}
+.month-report-name{font-weight:800;font-size:15px;color:#482317}
+.month-report-meta{font-size:12px;color:#88766e}
+.month-report-button>strong{font-family:Manrope,sans-serif;font-size:18px;color:#35190f}
+.month-report-action{font-size:12px;color:#d9446e;font-weight:700}
+.daily-report-group{margin:0 0 16px;border:1px solid #f0d8cc;border-radius:12px;overflow:hidden;background:#fff}
+.daily-report-head{display:flex;justify-content:space-between;align-items:center;gap:15px;padding:14px 16px;background:#fff7f3;border-bottom:1px solid #f0d8cc}
+.daily-report-head h4{margin:0 0 4px;font-size:15px;color:#482317}
+.daily-report-head>div:first-child>span{font-size:12px;color:#88766e}
+.daily-report-totals{display:flex;gap:14px;flex-wrap:wrap;justify-content:flex-end}
+.daily-report-totals span{display:flex;flex-direction:column;gap:3px;color:#88766e;font-size:11px}
+.daily-report-totals strong{font-size:14px;color:#35190f;white-space:nowrap}
+.daily-subtotal-row td{background:#fffaf7;font-weight:700;color:#633a2b}
+@media(max-width:700px){.month-report-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.month-report-button{padding:12px}.month-report-button>strong{font-size:15px}.daily-report-head{align-items:flex-start;flex-direction:column}.daily-report-totals{justify-content:flex-start}.daily-report-totals span{min-width:100px}}
+@media(max-width:430px){.month-report-grid{grid-template-columns:1fr}}
+
+/* Monthly report date rows: summaries stay visible; transaction rows expand on click */
+.daily-report-toggle{display:flex;width:100%;align-items:center;justify-content:space-between;gap:14px;padding:14px 16px;border:0;background:#fffaf7;text-align:left;color:#442b21;cursor:pointer}
+.daily-report-toggle:hover,.daily-report-toggle:focus{background:#fff0f4;outline:2px solid #ed527c;outline-offset:-2px}
+.daily-report-date{display:flex;flex-direction:column;gap:4px;min-width:120px}
+.daily-report-date strong{font-size:14px;color:#482317}
+.daily-report-date small{font-size:12px;color:#88766e}
+.daily-report-toggle .daily-report-totals{flex:1}
+.daily-report-action{font-size:12px;font-weight:800;color:#d9446e;white-space:nowrap}
+.daily-report-content{padding:0 12px 12px}
+.daily-report-group.expanded .daily-report-toggle{border-bottom:1px solid #f0d8cc}
+@media(max-width:700px){.daily-report-toggle{align-items:flex-start;flex-direction:column;gap:10px;padding:12px}.daily-report-toggle .daily-report-totals{justify-content:flex-start;width:100%}.daily-report-action{align-self:flex-end}}
