@@ -1,0 +1,31 @@
+SATHISH FAMILY FINANCE — UPDATE NOTES
+
+Files:
+- index.html
+- style.css
+- app.js
+- firestore.rules
+
+Implemented:
+1. Monthly opening/carry-forward balance is calculated from previous month closing balance.
+2. Dashboard balance includes opening balance; a month already carried into a later month displays ₹0 on its dashboard balance card to avoid double counting. Monthly Report retains the historical closing balance.
+3. EMI payments made through the EMI screen or Daily Entries with a linked EMI advance the due date by one month, reduce remaining EMI months by one, and reduce outstanding balance.
+4. Added a separate Credit Cards screen with total outstanding, expected monthly payment, paid-this-month, due date and payment action.
+5. Credit card payments are saved as expenses and reduce card outstanding; payment transactions are linked to the card record.
+
+Important:
+- Existing Firestore collections and documents are preserved. New credit card records are stored in users/{uid}/creditCards.
+- Existing Firestore rules already permit each signed-in user to access their own subcollections, so no rules change was required.
+- Before deploying, back up your Firebase project.
+- For each existing EMI, fill in Remaining EMI months (e.g. 45) in Edit if you need an exact countdown. If left blank, the app derives it from start and maturity dates.
+- For a Daily Entry payment to update an EMI or credit card, choose the corresponding optional link field.
+- For older EMI payment records already entered before this update, the app does not retroactively decrement months or alter due dates.
+
+EMI count correction (7-Nov-2026): Balance EMI Months is now calculated from the saved Next Due Date through the Maturity Date, counting future monthly due dates inclusively. Legacy remainingMonths values are ignored so stale manual counts cannot override the date-based result. EMI payment advances the contractual due date by one month while preserving its due-day, including when a payment is recorded late. The manual remaining-month input has been removed; no existing EMI documents or payment history are deleted.
+
+Monthly Report Save Balance fix:
+- Reworked the Save Balance action to validate sign-in, month, and amount before writing.
+- Updates an existing month balance or creates a new one in the user's monthlyBalances collection.
+- Reloads saved monthly balances, retains the selected report month, and refreshes the monthly report and dashboard after saving.
+- Enter key in the opening-balance field also triggers Save Balance.
+- Firebase/browser live save still requires testing in the user's signed-in environment.

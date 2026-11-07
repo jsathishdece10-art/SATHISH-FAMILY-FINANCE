@@ -29,6 +29,7 @@
         <button class="side-link" data-tab="expenses"><span>↘</span> Expenses</button>
         <button class="side-link" data-tab="entries"><span>☷</span> Daily Entries</button>
         <button class="side-link" data-tab="commitments"><span>▤</span> EMI & Loans</button>
+        <button class="side-link" data-tab="credit-cards"><span>💳</span> Credit Cards</button>
         <button class="side-link" data-tab="savings"><span>♧</span> Savings Schemes</button>
         <button class="side-link" data-tab="insurance"><span>♡</span> Insurance</button>
         <button class="side-link" data-tab="reports"><span>▨</span> Reports</button>
@@ -99,6 +100,8 @@
               <label>Amount (₹)<input id="txAmount" type="number" min="0.01" step="0.01" required placeholder="0.00"></label>
               <label>Payment method<select id="txMethod"><option>UPI</option><option>Cash</option><option>Bank transfer</option><option>Debit card</option><option>Credit card</option><option>Auto debit</option><option>Other</option></select></label>
               <label>Account / person<input id="txAccount" placeholder="Salary account, family member..."></label>
+              <label>Link EMI payment (optional)<select id="txLinkedEmi"><option value="">Not linked</option></select></label>
+              <label>Link credit card payment (optional)<select id="txLinkedCreditCard"><option value="">Not linked</option></select></label>
               <label class="wide-field">Notes<input id="txNotes" placeholder="Optional details"></label>
               <div class="form-actions wide-field"><button class="primary-btn" type="submit" id="saveTxBtn">Save Entry</button><button class="soft-btn hidden" type="button" id="cancelTxBtn">Cancel Edit</button></div>
             </form>
@@ -112,10 +115,31 @@
               <label>Loan / EMI name<input id="cName" required placeholder="HDFC personal loan"></label><label>Lender<input id="cLender" placeholder="Bank / lender"></label>
               <label>Loan total amount (₹)<input id="cTotalAmount" type="number" min="0" step="0.01" placeholder="Original loan amount"></label><label>Monthly EMI (₹)<input id="cMonthly" type="number" min="0" step="0.01" required></label><label>Outstanding balance (₹)<input id="cOutstanding" type="number" min="0" step="0.01" value="0" required></label>
               <label>Start date<input id="cStart" type="date" required></label><label>Maturity date<input id="cMaturity" type="date" required></label>
-              <label>Next due date<input id="cDue" type="date"></label><label>Status<select id="cStatus"><option value="active">Active</option><option value="closed">Closed</option></select></label>
+              <label>Next due date<input id="cDue" type="date"></label><label>Balance EMI months <small>(Auto-calculated from next due date to maturity)</small></label><label>Status<select id="cStatus"><option value="active">Active</option><option value="closed">Closed</option></select></label>
               <label class="wide-field">Notes<input id="cNotes" placeholder="Optional notes"></label><div class="form-actions wide-field"><button class="primary-btn" type="submit">Save Commitment</button><button class="soft-btn hidden" type="button" id="cancelCommitmentBtn">Cancel Edit</button></div>
             </form>
             <div class="data-card"><div class="table-wrap"><table><thead><tr><th>Name</th><th>Lender</th><th>Monthly EMI</th><th>Paid amount</th><th>Outstanding</th><th>Balance EMI months</th><th>Start</th><th>Maturity</th><th>Next Due</th><th>Status</th><th>Actions</th></tr></thead><tbody id="commitmentsBody"></tbody></table></div></div>
+          </section>
+
+          <section id="tab-credit-cards" class="content-panel tab-panel hidden">
+            <div class="panel-heading"><div><h2>Credit Cards</h2><p>Track credit card outstanding separately from regular EMI loans. Record only the payment due for the current month.</p></div></div>
+            <div class="section-total-grid">
+              <article class="section-total"><span>Total Outstanding</span><strong id="ccOutstandingTotal">₹0</strong><small>All active credit cards</small></article>
+              <article class="section-total"><span>Monthly Payment Plan</span><strong id="ccMonthlyTotal">₹0</strong><small>Expected monthly payment</small></article>
+              <article class="section-total"><span>Active Cards</span><strong id="ccCount">0</strong><small>Credit card accounts</small></article>
+            </div>
+            <form id="creditCardForm" class="entry-form">
+              <input type="hidden" id="creditCardId">
+              <label>Credit card name<input id="ccName" required placeholder="HDFC Credit Card"></label>
+              <label>Bank<input id="ccBank" placeholder="HDFC / ICICI / SBI"></label>
+              <label>Total outstanding (₹)<input id="ccOutstanding" type="number" min="0" step="0.01" required></label>
+              <label>Expected monthly payment (₹)<input id="ccMonthlyPayment" type="number" min="0" step="0.01" required></label>
+              <label>Minimum due (₹)<input id="ccMinimumDue" type="number" min="0" step="0.01" value="0"></label>
+              <label>Payment due date<input id="ccDueDate" type="date" required></label>
+              <label>Status<select id="ccStatus"><option value="active">Active</option><option value="closed">Closed</option></select></label>
+              <div class="form-actions wide-field"><button class="primary-btn" type="submit">Save Credit Card</button><button class="soft-btn hidden" type="button" id="cancelCreditCardBtn">Cancel Edit</button></div>
+            </form>
+            <div class="data-card"><div class="table-wrap"><table><thead><tr><th>Card</th><th>Bank</th><th>Monthly plan</th><th>Paid this month</th><th>Outstanding</th><th>Next due</th><th>Status</th><th>Actions</th></tr></thead><tbody id="creditCardsBody"></tbody></table></div></div>
           </section>
           <section id="tab-savings" class="content-panel tab-panel hidden">
             <div class="panel-heading"><div><h2>Savings Schemes</h2><p>Track your savings, investments, contribution and maturity.</p></div></div>
@@ -149,13 +173,13 @@
             <div class="panel-heading"><div><h2>Monthly Report</h2><p>Open a month to view income, expenses, EMI, savings and carried-forward balance.</p></div></div>
             <div class="month-report-section">
               <h3 class="month-report-heading">Choose a month</h3>
-              <p class="month-report-help">Only months with saved transactions are shown. Select a month to see entries grouped by date.</p>
+              <p class="month-report-help">Months with transactions or a saved opening balance are shown. The previous month closing balance automatically becomes the next month opening balance; the transferred amount is not counted twice.</p>
               <div id="monthlyReportList" class="month-report-grid"></div>
             </div>
             <div class="entry-form">
               <label>Report month<select id="reportMonth"></select></label>
-              <label>Manual opening / carry-forward balance (₹)<input id="manualOpeningBalance" type="number" step="0.01" value="0"></label>
-              <div class="form-actions"><button class="primary-btn" id="saveOpeningBalance" type="button">Save Balance</button></div>
+              <label>Opening balance adjustment (₹)<input id="manualOpeningBalance" type="number" step="0.01" value="0"></label>
+              <div class="form-actions"><button class="primary-btn" id="saveOpeningBalance" type="button">Save Opening Balance</button><button class="soft-btn" id="transferClosingBalance" type="button">Transfer Closing to Next Month</button></div>
             </div>
             <div id="monthlyReportSummary" class="section-total-grid"></div>
             <div id="monthlyReportDetails" class="data-card"></div>

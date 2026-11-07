@@ -160,3 +160,10 @@ td.amount, .section-total strong, .saving-row-head b, .budget-item strong {
 .daily-report-content{padding:0 12px 12px}
 .daily-report-group.expanded .daily-report-toggle{border-bottom:1px solid #f0d8cc}
 @media(max-width:700px){.daily-report-toggle{align-items:flex-start;flex-direction:column;gap:10px;padding:12px}.daily-report-toggle .daily-report-totals{justify-content:flex-start;width:100%}.daily-report-action{align-self:flex-end}}
+
+/* Credit card loan module — appended styles; existing finance layout retained */
+#tab-credit-cards .section-total-grid{margin-bottom:16px}
+#tab-credit-cards .data-card{margin-top:14px}
+#tab-credit-cards .panel-heading p{line-height:1.5}
+#tab-credit-cards .pill{white-space:nowrap}
+@media(max-width:700px){#tab-credit-cards .entry-form{grid-template-columns:1fr}}
