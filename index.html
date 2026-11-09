@@ -58,11 +58,19 @@
         <section class="metric-grid">
           <article class="metric income-metric"><div class="metric-icon">₹</div><div><span>Total Income</span><strong id="totalIncome">₹0</strong><small>This Month</small></div></article>
           <article class="metric expense-metric"><div class="metric-icon">▰</div><div><span>Total Expenses</span><strong id="totalExpense">₹0</strong><small>This Month</small></div></article>
-          <article class="metric balance-metric"><div class="metric-icon">▥</div><div><span>Balance</span><strong id="balance">₹0</strong><small>Income − Expenses − EMI − Savings</small></div></article>
+          <article class="metric balance-metric"><div class="metric-icon">▥</div><div><span>Monthly Net Position</span><strong id="balance">₹0</strong><small>Income − expenses − EMI − savings; Main Bank is tracked separately</small></div></article>
           <article class="metric saving-metric"><div class="metric-icon">♧</div><div><span>Savings Added</span><strong id="savingTotal">₹0</strong><small>This Month</small></div></article>
           <article class="metric emi-metric"><div class="metric-icon">▤</div><div><span>EMI Paid</span><strong id="emiPaid">₹0</strong><small>This Month</small></div></article>
           <article class="metric pending-metric"><div class="metric-icon">⌛</div><div><span>EMI Pending</span><strong id="emiPending">₹0</strong><small>Total Outstanding</small></div></article>
         </section>
+        <div class="section-total-grid account-balance-strip">
+          <article class="section-total"><span>Main Bank Available</span><strong id="dashboardMainBankBalance">Not configured</strong><small>UPI · Auto debit · Bank / Debit card</small></article>
+          <article class="section-total dashboard-card-available" id="dashboardCardAvailableToggle" role="button" tabindex="0" aria-expanded="false" title="Click to view each credit card">
+            <span>Total Credit Card Available</span><strong id="dashboardCardAvailable">₹0</strong>
+            <small>Combined available limit · Click to view each card</small>
+            <div id="dashboardCardAvailableDetails" class="dashboard-card-available-details hidden"></div>
+          </article>
+        </div>
 
             <div class="panel-heading"><div><h2>Monthly Cash Flow</h2><p>Income, spending and saving for the selected month.</p></div></div>
             <div class="cashflow-grid">
@@ -95,13 +103,14 @@
             <form id="transactionForm" class="entry-form">
               <input type="hidden" id="transactionId">
               <label>Date<input id="txDate" type="date" required></label>
-              <label>Type<select id="txType"><option value="expense">Expense</option><option value="income">Income</option><option value="saving">Savings contribution</option><option value="emi">EMI payment</option></select></label>
+              <label>Type<select id="txType"><option value="expense">Expense / Purchase</option><option value="income">Income</option><option value="saving">Savings contribution</option><option value="emi">EMI payment</option><option value="cardPayment">Credit Card Bill Payment</option></select></label>
               <label>Category<input id="txCategory" required placeholder="Groceries, Salary, Rent..."></label>
               <label>Amount (₹)<input id="txAmount" type="number" min="0.01" step="0.01" required placeholder="0.00"></label>
               <label>Payment method<select id="txMethod"><option>UPI</option><option>Cash</option><option>Bank transfer</option><option>Debit card</option><option>Credit card</option><option>Auto debit</option><option>Other</option></select></label>
               <label>Account / person<input id="txAccount" placeholder="Salary account, family member..."></label>
               <label>Link EMI payment (optional)<select id="txLinkedEmi"><option value="">Not linked</option></select></label>
-              <label>Link credit card payment (optional)<select id="txLinkedCreditCard"><option value="">Not linked</option></select></label>
+              <label>Credit Card used (for card purchase)<select id="txLinkedCreditCard"><option value="">Select card used</option></select></label>
+              <label>Credit Card bill to pay (for bill payment)<select id="txBillPaymentCard"><option value="">Select card bill</option></select></label>
               <label class="wide-field">Notes<input id="txNotes" placeholder="Optional details"></label>
               <div class="form-actions wide-field"><button class="primary-btn" type="submit" id="saveTxBtn">Save Entry</button><button class="soft-btn hidden" type="button" id="cancelTxBtn">Cancel Edit</button></div>
             </form>
@@ -124,22 +133,26 @@
           <section id="tab-credit-cards" class="content-panel tab-panel hidden">
             <div class="panel-heading"><div><h2>Credit Cards</h2><p>Track credit card outstanding separately from regular EMI loans. Record only the payment due for the current month.</p></div></div>
             <div class="section-total-grid">
+              <article class="section-total"><span>Total Credit Limit</span><strong id="ccLimitTotal">₹0</strong><small>Combined active card limits</small></article>
+              <article class="section-total"><span>Total Available Balance</span><strong id="ccAvailableTotal">₹0</strong><small>Credit limit less outstanding</small></article>
               <article class="section-total"><span>Total Outstanding</span><strong id="ccOutstandingTotal">₹0</strong><small>All active credit cards</small></article>
               <article class="section-total"><span>Monthly Payment Plan</span><strong id="ccMonthlyTotal">₹0</strong><small>Expected monthly payment</small></article>
               <article class="section-total"><span>Active Cards</span><strong id="ccCount">0</strong><small>Credit card accounts</small></article>
             </div>
+            <div class="data-card main-bank-panel"><div class="panel-heading"><div><h2>🏦 Main Bank Balance</h2><p>UPI, Auto debit, Bank transfer and Debit card transactions update this balance.</p></div><strong id="mainBankBalance">Not configured</strong></div><form id="mainBankForm" class="entry-form"><label>Current Main Bank balance (₹)<input id="mainBankOpening" type="number" min="0" step="0.01" required placeholder="Enter actual bank balance"></label><div class="form-actions"><button class="primary-btn" type="submit">Save Main Bank Balance</button></div></form><p class="report-note">Set this to your actual bank balance as of today. New bank-linked transactions will increase or decrease it automatically. Existing transaction history is not recalculated.</p></div>
             <form id="creditCardForm" class="entry-form">
               <input type="hidden" id="creditCardId">
               <label>Credit card name<input id="ccName" required placeholder="HDFC Credit Card"></label>
               <label>Bank<input id="ccBank" placeholder="HDFC / ICICI / SBI"></label>
-              <label>Total outstanding (₹)<input id="ccOutstanding" type="number" min="0" step="0.01" required></label>
+              <label>Total credit limit (₹)<input id="ccCreditLimit" type="number" min="0" step="0.01" required placeholder="e.g. 100000"></label>
+              <label>Current outstanding (₹)<input id="ccOutstanding" type="number" min="0" step="0.01" required></label>
               <label>Expected monthly payment (₹)<input id="ccMonthlyPayment" type="number" min="0" step="0.01" required></label>
               <label>Minimum due (₹)<input id="ccMinimumDue" type="number" min="0" step="0.01" value="0"></label>
               <label>Payment due date<input id="ccDueDate" type="date" required></label>
               <label>Status<select id="ccStatus"><option value="active">Active</option><option value="closed">Closed</option></select></label>
               <div class="form-actions wide-field"><button class="primary-btn" type="submit">Save Credit Card</button><button class="soft-btn hidden" type="button" id="cancelCreditCardBtn">Cancel Edit</button></div>
             </form>
-            <div class="data-card"><div class="table-wrap"><table><thead><tr><th>Card</th><th>Bank</th><th>Monthly plan</th><th>Paid this month</th><th>Outstanding</th><th>Next due</th><th>Status</th><th>Actions</th></tr></thead><tbody id="creditCardsBody"></tbody></table></div></div>
+            <div class="data-card"><div class="table-wrap"><table><thead><tr><th>Card</th><th>Bank</th><th>Credit limit</th><th>Available balance</th><th>Outstanding</th><th>Bill paid this month</th><th>Monthly plan</th><th>Next due</th><th>Status</th><th>Actions</th></tr></thead><tbody id="creditCardsBody"></tbody></table></div></div>
           </section>
           <section id="tab-savings" class="content-panel tab-panel hidden">
             <div class="panel-heading"><div><h2>Savings Schemes</h2><p>Track your savings, investments, contribution and maturity.</p></div></div>

@@ -29,3 +29,12 @@ Monthly Report Save Balance fix:
 - Reloads saved monthly balances, retains the selected report month, and refreshes the monthly report and dashboard after saving.
 - Enter key in the opening-balance field also triggers Save Balance.
 - Firebase/browser live save still requires testing in the user's signed-in environment.
+
+
+Monthly closing-balance transfer update (2026-11-07):
+- Monthly income is included once in the month ledger. Closing balance = opening balance + income - expenses - EMI - savings.
+- Carry-forward is no longer automatic. The user must select a month and click “Transfer Closing to Next Month”, then confirm the browser prompt.
+- On confirmation, the source month stores the confirmed transfer amount/month and the next month opening balance is set to that closing amount. The target opening balance is replaced only after explicit confirmation.
+- Dashboard hides the source month's closing balance after confirmed transfer to prevent double counting; monthly report history keeps the calculated closing amount.
+- Transfer data is stored in the existing monthlyBalances collection; Firestore rules/schema migration is not required.
+- JavaScript syntax checked with node --check. Live Firebase/browser test remains pending.

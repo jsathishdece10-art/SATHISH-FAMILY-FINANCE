@@ -23,7 +23,7 @@ const app = configReady ? initializeApp(firebaseConfig) : null;
 const auth = app ? getAuth(app) : null;
 const db = app ? getFirestore(app) : null;
 let currentUser = null;
-let transactions = [], commitments = [], savings = [], insurances = [], monthlyBalances = [], creditCards = [];
+let transactions = [], commitments = [], savings = [], insurances = [], monthlyBalances = [], creditCards = [], bankAccounts = [];
 let openReportMonth = null;
 let openReportDate = null;
 const currency = n => new Intl.NumberFormat("en-IN",{style:"currency",currency:"INR",minimumFractionDigits:0,maximumFractionDigits:0}).format(Number(n)||0);
@@ -34,7 +34,7 @@ const path = name => collection(db,"users",currentUser.uid,name);
 const showDate = v => v ? esc(v) : "—";
 const formVal = id => $(id).value.trim();
 function setBusy(btn, busy, label){ if(!btn.dataset.original) btn.dataset.original=btn.textContent; btn.disabled=busy; btn.textContent=busy?"Saving…":(label||btn.dataset.original); }
-function clearTxForm(){ $("transactionForm").reset(); $("transactionId").value=""; if($("txLinkedEmi"))$("txLinkedEmi").value=""; if($("txLinkedCreditCard"))$("txLinkedCreditCard").value=""; $("txDate").value=today(); $("saveTxBtn").textContent="Save entry"; $("cancelTxBtn").classList.add("hidden"); }
+function clearTxForm(){ $("transactionForm").reset(); $("transactionId").value=""; if($("txLinkedEmi"))$("txLinkedEmi").value=""; if($("txLinkedCreditCard"))$("txLinkedCreditCard").value=""; if($("txBillPaymentCard"))$("txBillPaymentCard").value=""; $("txDate").value=today(); $("saveTxBtn").textContent="Save entry"; $("cancelTxBtn").classList.add("hidden"); }
 function clearCommitmentForm(){ $("commitmentForm").reset(); $("commitmentId").value=""; $("cOutstanding").value="0"; $("cTotalAmount").value=""; $("cStart").value=today(); $("cMaturity").value=""; $("cancelCommitmentBtn").classList.add("hidden"); }
 function clearSavingForm(){ $("savingForm").reset(); $("savingId").value=""; $("sCurrent").value="0"; $("sTarget").value="0"; $("cancelSavingBtn").classList.add("hidden"); }
 function clearInsuranceForm(){ $("insuranceForm").reset(); $("insuranceId").value=""; $("iCoverage").value="0"; $("iStart").value=today(); $("iMaturity").value=""; $("cancelInsuranceBtn").classList.add("hidden"); }
@@ -43,7 +43,7 @@ function monthOptions(){
   for(let i=0;i<24;i++){ const d=new Date(now.getFullYear(),now.getMonth()-i,1); const val=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; const opt=document.createElement("option"); opt.value=val; opt.textContent=d.toLocaleDateString("en-IN",{month:"long",year:"numeric"}); select.append(opt); }
 }
 async function loadAll(){
-  const names=[["transactions","transactions"],["commitments","commitments"],["savings","savings"],["insurances","insurances"],["monthlyBalances","monthlyBalances"],["creditCards","creditCards"]];
+  const names=[["transactions","transactions"],["commitments","commitments"],["savings","savings"],["insurances","insurances"],["monthlyBalances","monthlyBalances"],["creditCards","creditCards"],["bankAccounts","bankAccounts"]];
   const results=await Promise.all(names.map(async ([key,col])=>[key,(await getDocs(path(col))).docs.map(d=>({id:d.id,...d.data()}))]));
   for (const [key, value] of results) {
     if (key === "transactions") transactions = value;
@@ -52,6 +52,7 @@ async function loadAll(){
     else if (key === "insurances") insurances = value;
     else if (key === "monthlyBalances") monthlyBalances = value;
     else if (key === "creditCards") creditCards = value;
+    else if (key === "bankAccounts") bankAccounts = value;
   }
   populateLinkedPaymentOptions();
   renderAll();
@@ -93,7 +94,16 @@ function getMonthLedger(month){
     const opening=saved && saved.openingBalance!==undefined ? Number(saved.openingBalance||0) : transferredOpening;
     const rows=transactions.filter(t=>monthKeyFromDate(t.date)===m);
     const income=rows.filter(t=>t.type==="income").reduce((n,t)=>n+Number(t.amount||0),0);
-    const expense=rows.filter(t=>t.type==="expense").reduce((n,t)=>n+Number(t.amount||0),0);
+    const expense = rows
+.filter(t =>
+    t.type==="expense" &&
+    t.paymentFlow!=="credit_card_purchase"
+)
+.reduce(
+    (n,t)=>n+Number(t.amount||0),
+    0
+);
+
     const emi=rows.filter(t=>t.type==="emi").reduce((n,t)=>n+Number(t.amount||0),0);
     const saving=rows.filter(t=>t.type==="saving").reduce((n,t)=>n+Number(t.amount||0),0);
     const closing=opening+income-expense-emi-saving;
@@ -143,6 +153,40 @@ async function applyCommitmentPayment(record, amount, paymentDate, transactionId
   });
 }
 
+function bankOpeningRecord(){ return bankAccounts.find(a=>a.accountType==="main") || bankAccounts[0] || null; }
+function isBankMethod(method){ return ["UPI","Auto debit","Bank transfer","Debit card"].includes(method||""); }
+function recordedAfterBaseline(t, record){
+  if(Number(record?.baselineAtMs)>0){
+    const created=typeof t.createdAt?.toMillis==="function"?t.createdAt.toMillis():(t.createdAt instanceof Date?t.createdAt.getTime():0);
+    return created>Number(record.baselineAtMs);
+  }
+  return (t.date||"")>=(record?.effectiveFrom||"0000-01-01");
+}
+function mainBankCurrentBalance(){
+  const account=bankOpeningRecord(); if(!account) return 0;
+  const movement=transactions.filter(t=>t.bankImpactApplied && recordedAfterBaseline(t,account)).reduce((n,t)=>n+Number(t.bankImpactAmount||0),0);
+  return Number(account.openingBalance||0)+movement;
+}
+function cardCurrentOutstanding(card){
+  const movement=transactions.filter(t=>t.cardImpactApplied && t.linkedCreditCardId===card.id && recordedAfterBaseline(t,card)).reduce((n,t)=>n+Number(t.cardImpactAmount||0),0);
+  return Math.max(0,Number(card.openingOutstanding??card.outstanding??0)+movement);
+}
+function cardAvailableBalance(card){ return Math.max(0,Number(card.creditLimit||0)-cardCurrentOutstanding(card)); }
+function transactionTypeLabel(t){ return t.type==="cardPayment"?"Credit Card Bill Payment":t.type; }
+function renderDashboardCardBreakdown(){
+  const details=$("dashboardCardAvailableDetails");
+  if(!details)return;
+  const active=creditCards.filter(c=>c.status!=="closed");
+  details.innerHTML=active.length?active.map(card=>{
+    const outstanding=cardCurrentOutstanding(card);
+    const available=cardAvailableBalance(card);
+    return `<div class="dashboard-card-row">
+      <span><b>${esc(card.name)}</b> · ${esc(card.bank||"")}</span>
+      <strong>${currency(available)} available</strong>
+      <small>Credit limit ${currency(card.creditLimit||0)} · Outstanding ${currency(outstanding)}</small>
+    </div>`;
+  }).join(""):'<small>No active credit cards added.</small>';
+}
 function renderDashboard(){
   const list=selectedTransactions();
   const sum=type=>list.filter(t=>t.type===type).reduce((a,t)=>a+Number(t.amount||0),0);
@@ -154,18 +198,49 @@ function renderDashboard(){
     ? overallLedger.closing
     : (ledger?.transferredOut ? 0 : ledger.closing);
   setText("totalIncome", currency(sum("income")));
-  setText("totalExpense", currency(sum("expense")+sum("emi")));
+  const normalExpense =
+list
+.filter(t =>
+    t.type==="expense" &&
+    t.paymentFlow!=="credit_card_purchase"
+)
+.reduce(
+   (a,t)=>a+Number(t.amount||0),
+   0
+);
+
+setText(
+   "totalExpense",
+   currency(normalExpense + sum("emi"))
+);
   setText("balance", currency(balanceValue));
   const balanceHint=document.querySelector("#balance")?.parentElement?.querySelector("small");
-  if(balanceHint) balanceHint.textContent=selectedMonth==="all"?"Overall available balance":(ledger?.transferredOut?`Transferred to ${ledger.transferredToMonth}`:"Includes confirmed opening / carry-forward balance");
+  if(balanceHint) balanceHint.textContent=selectedMonth==="all"?"Overall monthly net position":(ledger?.transferredOut?`Transferred to ${ledger.transferredToMonth}`:"");
   setText("savingTotal", currency(sum("saving")));
   setText("emiPaid", currency(sum("emi")));
   setText("emiPending", currency(commitments.filter(c=>c.status==="active").reduce((a,c)=>a+Number(c.outstanding||0),0)));
+  setText("dashboardMainBankBalance", bankAccounts.length?currency(mainBankCurrentBalance()):"Set opening balance");
+  setText("dashboardCardAvailable",currency(creditCards.filter(c=>c.status!=="closed").reduce((n,c)=>n+cardAvailableBalance(c),0)));
+  renderDashboardCardBreakdown();
 }
+function toggleDashboardCardBreakdown(){
+  const card=$("dashboardCardAvailableToggle"),details=$("dashboardCardAvailableDetails");
+  if(!card||!details)return;
+  const open=details.classList.contains("hidden");
+  details.classList.toggle("hidden",!open);
+  card.setAttribute("aria-expanded",String(open));
+}
+$("dashboardCardAvailableToggle")?.addEventListener("click",e=>{
+  if(e.target.closest("button,a"))return;
+  toggleDashboardCardBreakdown();
+});
+$("dashboardCardAvailableToggle")?.addEventListener("keydown",e=>{
+  if(e.key==="Enter"||e.key===" "){e.preventDefault();toggleDashboardCardBreakdown();}
+});
 function renderTransactions(){
   const q=$("txSearch").value.toLowerCase();
   const list=[...transactions].filter(t=>[t.date,t.type,t.category,t.method,t.account,t.notes].join(" ").toLowerCase().includes(q)).sort((a,b)=>(b.date||"").localeCompare(a.date||""));
-  $("transactionsBody").innerHTML=list.map(t=>`<tr><td>${showDate(t.date)}</td><td><span class="pill ${esc(t.type)}">${esc(t.type)}</span></td><td>${esc(t.category)}</td><td class="amount">${currency(t.amount)}</td><td>${esc(t.method||"—")}</td><td>${esc([t.account,t.notes].filter(Boolean).join(" · ")||"—")}</td><td><button class="mini-btn" data-edit-tx="${esc(t.id)}">Edit</button><button class="mini-btn delete" data-delete-tx="${esc(t.id)}">Delete</button></td></tr>`).join("")||'<tr><td colspan="7">No transactions yet. Add your first entry above.</td></tr>';
+  $("transactionsBody").innerHTML=list.map(t=>`<tr><td>${showDate(t.date)}</td><td><span class="pill ${esc(t.type)}">${esc(transactionTypeLabel(t))}</span></td><td>${esc(t.category)}</td><td class="amount">${currency(t.amount)}</td><td>${esc(t.method||"—")}</td><td>${esc([t.account,t.notes].filter(Boolean).join(" · ")||"—")}</td><td><button class="mini-btn" data-edit-tx="${esc(t.id)}">Edit</button><button class="mini-btn delete" data-delete-tx="${esc(t.id)}">Delete</button></td></tr>`).join("")||'<tr><td colspan="7">No transactions yet. Add your first entry above.</td></tr>';
 }
 function renderCommitments(){
   $("commitmentsBody").innerHTML=[...commitments].sort((a,b)=>(a.name||"").localeCompare(b.name||"")).map(c=>`<tr><td>${esc(c.name)}</td><td>${esc(c.lender||"—")}</td><td class="amount">${currency(c.monthly)}</td><td class="amount">${currency(c.paidAmount||0)}</td><td class="amount">${currency(c.outstanding)}</td><td>${getCommitmentRemainingMonths(c)}</td><td>${showDate(c.start)}</td><td>${showDate(c.maturity)}</td><td>${showDate(c.due)}</td><td><span class="pill">${esc(c.status)}</span></td><td><button class="mini-btn" data-pay-c="${esc(c.id)}">Add to Daily Entry</button><button class="mini-btn" data-edit-c="${esc(c.id)}">Edit</button><button class="mini-btn delete" data-delete-c="${esc(c.id)}">Delete</button></td></tr>`).join("")||'<tr><td colspan="11">No EMI or loan commitments added.</td></tr>';
@@ -173,16 +248,19 @@ function renderCommitments(){
 
 function renderCreditCards(){
   const body=$("creditCardsBody"); if(!body)return;
-  body.innerHTML=[...creditCards].sort((a,b)=>(a.dueDate||a.nextDue||"").localeCompare(b.dueDate||b.nextDue||"")).map(c=>`<tr>
-    <td>${esc(c.name)}</td><td>${esc(c.bank||"—")}</td><td class="amount">${currency(c.monthlyPayment||0)}</td>
-    <td class="amount">${currency(transactions.filter(t=>t.linkedCreditCardId===c.id&&monthKeyFromDate(t.date)===today().slice(0,7)).reduce((n,t)=>n+Number(t.amount||0),0))}</td><td class="amount">${currency(c.outstanding||0)}</td>
-    <td>${showDate(c.dueDate||c.nextDue)}</td><td><span class="pill">${esc(c.status||"active")}</span></td>
-    <td><button class="mini-btn" data-pay-card="${esc(c.id)}">Add Payment</button><button class="mini-btn" data-edit-card="${esc(c.id)}">Edit</button><button class="mini-btn delete" data-delete-card="${esc(c.id)}">Delete</button></td>
-  </tr>`).join("")||'<tr><td colspan="8">No credit cards added yet.</td></tr>';
+  body.innerHTML=[...creditCards].sort((a,b)=>(a.dueDate||a.nextDue||"").localeCompare(b.dueDate||b.nextDue||"")).map(c=>{
+    const outstanding=cardCurrentOutstanding(c), available=cardAvailableBalance(c);
+    const paid=transactions.filter(t=>t.type==="cardPayment"&&t.linkedCreditCardId===c.id&&monthKeyFromDate(t.date)===today().slice(0,7)).reduce((n,t)=>n+Number(t.amount||0),0);
+    return `<tr><td>${esc(c.name)}</td><td>${esc(c.bank||"—")}</td><td class="amount">${currency(c.creditLimit||0)}</td><td class="amount">${currency(available)}</td><td class="amount">${currency(outstanding)}</td><td class="amount">${currency(paid)}</td><td class="amount">${currency(c.monthlyPayment||0)}</td><td>${showDate(c.dueDate||c.nextDue)}</td><td><span class="pill">${esc(c.status||"active")}</span></td><td><button class="mini-btn" data-pay-card="${esc(c.id)}">Add Bill Payment</button><button class="mini-btn" data-edit-card="${esc(c.id)}">Edit</button><button class="mini-btn delete" data-delete-card="${esc(c.id)}">Delete</button></td></tr>`;
+  }).join("")||'<tr><td colspan="10">No credit cards added yet.</td></tr>';
   const active=creditCards.filter(c=>c.status!=="closed");
-  setText("ccOutstandingTotal",currency(active.reduce((n,c)=>n+Number(c.outstanding||0),0)));
+  setText("ccOutstandingTotal",currency(active.reduce((n,c)=>n+cardCurrentOutstanding(c),0)));
   setText("ccMonthlyTotal",currency(active.reduce((n,c)=>n+Number(c.monthlyPayment||c.minimumDue||0),0)));
   setText("ccCount",String(active.length));
+  setText("ccLimitTotal",currency(active.reduce((n,c)=>n+Number(c.creditLimit||0),0)));
+  setText("ccAvailableTotal",currency(active.reduce((n,c)=>n+cardAvailableBalance(c),0)));
+  setText("mainBankBalance",bankAccounts.length?currency(mainBankCurrentBalance()):"Not configured");
+  const bankInput=$("mainBankOpening"); if(bankInput && bankAccounts.length && document.activeElement!==bankInput) bankInput.value=mainBankCurrentBalance();
 }
 
 function renderSavings(){
@@ -234,7 +312,22 @@ function renderSectionTotals(){
   set("incomeScreenTotal",currency(sumType("income")));
   set("incomeScreenMonthTotal",currency(sumType("income",monthList)));
   set("incomeScreenCount",transactions.filter(t=>t.type==="income").length.toLocaleString("en-IN"));
-  set("expenseScreenTotal",currency(sumType("expense")+sumType("emi")));
+  const actualExpense =
+transactions
+.filter(t =>
+   t.type==="expense" &&
+   t.paymentFlow!=="credit_card_purchase"
+)
+.reduce(
+   (a,t)=>a+Number(t.amount||0),
+   0
+);
+
+set(
+ "expenseScreenTotal",
+ currency(actualExpense + sumType("emi"))
+);
+
   set("expenseScreenMonthTotal",currency(sumType("expense",monthList)+sumType("emi",monthList)));
   set("expenseScreenCount",transactions.filter(t=>t.type==="expense"||t.type==="emi").length.toLocaleString("en-IN"));
   set("dailyEntryCount",transactions.length.toLocaleString("en-IN"));
@@ -257,7 +350,18 @@ function renderAll(){renderDashboard();renderTransactions();renderCommitments();
 function renderChartsAndPanels(){
   const list=selectedTransactions();
   const incomes=list.filter(t=>t.type==="income").reduce((a,t)=>a+Number(t.amount||0),0);
-  const expenses=list.filter(t=>t.type==="expense"||t.type==="emi").reduce((a,t)=>a+Number(t.amount||0),0);
+  const expenses=list
+.filter(t =>
+   t.type==="emi" ||
+   (
+      t.type==="expense" &&
+      t.paymentFlow!=="credit_card_purchase"
+   )
+)
+.reduce(
+   (a,t)=>a+Number(t.amount||0),
+   0
+);
   const max=Math.max(incomes,expenses,1);
   const chart=$("cashflowChart");
   if(chart) chart.innerHTML=`
@@ -288,7 +392,7 @@ function renderChartsAndPanels(){
   if(preview) preview.innerHTML=savings.slice(0,4).map(s=>{const pct=Number(s.target)>0?Math.min(100,Number(s.current||0)/Number(s.target)*100):0;return `<div class="saving-row"><div class="saving-row-head"><span>${esc(s.name)}</span><b>${currency(s.current)}${Number(s.target)>0?" / "+currency(s.target):""}</b></div><div class="saving-track"><span style="width:${pct}%"></span></div></div>`;}).join("")||'<div class="chart-empty">Add your savings schemes to view progress.</div>';
   const recent=[...list].sort((a,b)=>(b.date||"").localeCompare(a.date||"")).slice(0,6);
   const recentBody=$("recentTransactionsBody");
-  if(recentBody) recentBody.innerHTML=recent.map(t=>`<tr><td>${showDate(t.date)}</td><td><span class="pill ${esc(t.type)}">${esc(t.type)}</span></td><td>${esc(t.category)}</td><td class="amount">${currency(t.amount)}</td><td>${esc(t.method||"—")}</td><td>${esc(t.notes||"—")}</td></tr>`).join("")||'<tr><td colspan="6">No entries for this month yet.</td></tr>';
+  if(recentBody) recentBody.innerHTML=recent.map(t=>`<tr><td>${showDate(t.date)}</td><td><span class="pill ${esc(t.type)}">${esc(transactionTypeLabel(t))}</span></td><td>${esc(t.category)}</td><td class="amount">${currency(t.amount)}</td><td>${esc(t.method||"—")}</td><td>${esc(t.notes||"—")}</td></tr>`).join("")||'<tr><td colspan="6">No entries for this month yet.</td></tr>';
   const cb=$("dashboardCommitmentsBody");
   if(cb) cb.innerHTML=commitments.filter(c=>c.status==="active").slice(0,5).map(c=>`<tr><td>${esc(c.name)}</td><td>${currency(c.monthly)}</td><td>${currency(c.outstanding)}</td><td>${showDate(c.due)}</td><td><span class="pill">${esc(c.status)}</span></td></tr>`).join("")||'<tr><td colspan="5">No active loans.</td></tr>';
   const ib=$("dashboardInsuranceBody");
@@ -457,7 +561,7 @@ function renderMonthlyReport(){
       </button>
       <div class="daily-report-content ${expanded?"":"hidden"}">
         <div class="table-wrap"><table><thead><tr><th>Type</th><th>Category</th><th>Amount</th><th>Method</th><th>Account / Notes</th></tr></thead><tbody>
-        ${items.map(t=>`<tr><td><span class="pill ${esc(t.type)}">${esc(t.type==="emi"?"EMI / Loan":t.type==="saving"?"Savings":t.type)}</span></td><td>${esc(t.category||"—")}</td><td class="amount">${currency(t.amount)}</td><td>${esc(t.method||"—")}</td><td>${esc([t.account,t.notes].filter(Boolean).join(" · ")||"—")}</td></tr>`).join("")}
+        ${items.map(t=>`<tr><td><span class="pill ${esc(t.type)}">${esc(transactionTypeLabel(t)==="emi"?"EMI / Loan":transactionTypeLabel(t)==="saving"?"Savings":transactionTypeLabel(t))}</span></td><td>${esc(t.category||"—")}</td><td class="amount">${currency(t.amount)}</td><td>${esc(t.method||"—")}</td><td>${esc([t.account,t.notes].filter(Boolean).join(" · ")||"—")}</td></tr>`).join("")}
         <tr class="daily-subtotal-row"><td colspan="2">Daily totals</td><td class="amount">${currency(expenseTotal)} expense + EMI</td><td colspan="2">Savings: ${currency(dailySaving)} · Income: ${currency(dailyIncome)}</td></tr>
         </tbody></table></div>
       </div>
@@ -471,27 +575,64 @@ async function addLinkedEntry(kind,id){
     const record=({emi:commitments,saving:savings,insurance:insurances,creditCard:creditCards})[kind]?.find(x=>x.id===id); if(!record)return;
     const amount=kind==="emi"?Number(record.monthly||0):kind==="saving"?Number(record.contribution||0):kind==="insurance"?Number(record.premium||0):Number(record.monthlyPayment||record.minimumDue||0);
     if(!(amount>0)){message("appMessage","Enter an amount greater than zero first.",true);return;}
-    const type=kind==="emi"?"emi":kind==="saving"?"saving":"expense";
-    const category=kind==="emi"?`${record.name} EMI`:kind==="saving"?`${record.name} contribution`:kind==="insurance"?`${record.name} premium`:`Credit Card Payment - ${record.name}`;
-    const transactionData={date:today(),type,category,amount,method:"Auto debit",account:record.lender||record.provider||record.company||record.bank||"",notes:`Added from ${kind==="emi"?"EMI & Loans":kind==="saving"?"Savings Schemes":kind==="insurance"?"Insurance":"Credit Cards"} screen`,...(kind==="emi"?{linkedCommitmentId:id,commitmentApplied:true}:{}),...(kind==="creditCard"?{linkedCreditCardId:id,creditCardApplied:true}:{})};
+    if((kind==="creditCard"||kind==="emi"||kind==="saving"||kind==="insurance") && !bankAccounts.length){message("appMessage","Set your Main Bank opening balance before recording an Auto debit payment.",true);return;}
+    if(kind==="creditCard" && amount>cardCurrentOutstanding(record)){message("appMessage",`Payment exceeds outstanding balance ${currency(cardCurrentOutstanding(record))}.`,true);return;}
+    const type=kind==="emi"?"emi":kind==="saving"?"saving":kind==="creditCard"?"cardPayment":"expense";
+    const category=kind==="emi"?`${record.name} EMI`:kind==="saving"?`${record.name} contribution`:kind==="insurance"?`${record.name} premium`:`Credit Card Bill Payment - ${record.name}`;
+    const transactionData={date:today(),type,category,amount,method:"Auto debit",account:record.lender||record.provider||record.company||record.bank||"",bankImpactApplied:kind!=="creditCard",bankImpactAmount:kind!=="creditCard"?-amount:0,notes:`Added from ${kind==="emi"?"EMI & Loans":kind==="saving"?"Savings Schemes":kind==="insurance"?"Insurance":"Credit Cards"} screen`,...(kind==="emi"?{linkedCommitmentId:id,commitmentApplied:true}:{}),...(kind==="creditCard"?{linkedCreditCardId:id,cardImpactApplied:true,cardImpactAmount:-amount,bankImpactApplied:true,bankImpactAmount:-amount}:{})};
     const transactionRef=await addDoc(path("transactions"),{...transactionData,createdAt:serverTimestamp(),updatedAt:serverTimestamp()});
-    if(kind==="emi"){
-      await applyCommitmentPayment(record,amount,today(),transactionRef.id);
-    }else if(kind==="saving"){
-      await saveRecord("savings",id,{current:Number(record.current||0)+amount});
-    }else if(kind==="insurance"){
-      await saveRecord("insurances",id,{paidAmount:Number(record.paidAmount||0)+amount});
-    }else{
-      const outstanding=Math.max(0,Number(record.outstanding||0)-amount);
-      await saveRecord("creditCards",id,{outstanding,paidThisMonth:Number(record.paidThisMonth||0)+amount,dueDate:nextMonthDue({due:record.dueDate||record.nextDue},today()),nextDue:nextMonthDue({due:record.dueDate||record.nextDue},today()),lastPaidDate:today()});
-    }
-    await loadAll(); showSection("entries"); message("appMessage",`${category} added to Daily Entries for today.`);
+    if(kind==="emi") await applyCommitmentPayment(record,amount,today(),transactionRef.id);
+    else if(kind==="saving") await saveRecord("savings",id,{current:Number(record.current||0)+amount});
+    else if(kind==="insurance") await saveRecord("insurances",id,{paidAmount:Number(record.paidAmount||0)+amount});
+    await loadAll(); showSection("entries"); message("appMessage",`${category} recorded. Bank and card balances updated without adding a duplicate expense.`);
   }catch(err){message("appMessage","Could not add payment: "+err.message,true);}
 }
+function toggleCreditCardFields(){
+
+    const type = $("txType")?.value;
+    const method = $("txMethod")?.value;
+
+    const purchaseCard =
+        $("txLinkedCreditCard")
+        ?.parentElement;
+
+    const billCard =
+        $("txBillPaymentCard")
+        ?.parentElement;
+
+    if(type === "cardPayment"){
+
+        if(purchaseCard)
+            purchaseCard.style.display="none";
+
+        if(billCard)
+            billCard.style.display="block";
+    }
+    else if(
+        type==="expense" &&
+        method==="Credit card"
+    ){
+
+        if(purchaseCard)
+            purchaseCard.style.display="block";
+
+        if(billCard)
+            billCard.style.display="none";
+    }
+    else{
+
+        if(purchaseCard)
+            purchaseCard.style.display="none";
+
+        if(billCard)
+            billCard.style.display="none";
+    }
+}
 function populateLinkedPaymentOptions(){
-  const emiSelect=$("txLinkedEmi"), cardSelect=$("txLinkedCreditCard");
+  const emiSelect=$("txLinkedEmi"), cardSelect=$("txLinkedCreditCard"), billSelect=$("txBillPaymentCard");
   if(emiSelect) emiSelect.innerHTML='<option value="">Not linked</option>'+commitments.filter(c=>c.status==="active").map(c=>`<option value="${esc(c.id)}">${esc(c.name)} · ${currency(c.monthly)}</option>`).join("");
-  if(cardSelect) cardSelect.innerHTML='<option value="">Not linked</option>'+creditCards.filter(c=>c.status!=="closed").map(c=>`<option value="${esc(c.id)}">${esc(c.name)} · ${currency(c.outstanding)}</option>`).join("");
+  if(cardSelect) cardSelect.innerHTML='<option value="">Select card used</option>'+creditCards.filter(c=>c.status!=="closed").map(c=>`<option value="${esc(c.id)}">${esc(c.name)} · Available ${currency(cardAvailableBalance(c))}</option>`).join("");
+  if(billSelect) billSelect.innerHTML='<option value="">Select card bill</option>'+creditCards.filter(c=>c.status!=="closed").map(c=>`<option value="${esc(c.id)}">${esc(c.name)} · Outstanding ${currency(cardCurrentOutstanding(c))}</option>`).join("");
 }
 
 async function saveRecord(collectionName,id,data){
@@ -530,48 +671,42 @@ $("transactionForm").addEventListener("submit",async e=>{
  e.preventDefault(); if(transactionSaving) return;
  const btn=$("saveTxBtn"), id=formVal("transactionId"); transactionSaving=true; setBusy(btn,true);
  try {
-   const type=formVal("txType"), amount=Number(formVal("txAmount"));
-   if(type==="saving") {
-     const available=transactions.reduce((a,t)=>a+(t.type==="income"?Number(t.amount||0):t.type==="expense"||t.type==="saving"||t.type==="emi"?-Number(t.amount||0):0),0);
-     if(!id && amount>available){message("appMessage",`Insufficient available balance. Remaining balance: ${currency(available)}.`,true);return;}
-   }
+   const selectedType=formVal("txType"), amount=Number(formVal("txAmount")), method=formVal("txMethod"), date=formVal("txDate");
+   if(!(amount>0)) throw new Error("Enter an amount greater than zero.");
+   const type=selectedType==="cardPayment"?"cardPayment":selectedType;
    const linkedEmiId=$("txLinkedEmi")?.value||"";
    const linkedCardId=$("txLinkedCreditCard")?.value||"";
-   const payload={date:formVal("txDate"),type,category:formVal("txCategory"),amount,method:formVal("txMethod"),account:formVal("txAccount"),notes:formVal("txNotes")};
-   if(!id && type==="emi" && linkedEmiId){
-     const linked=commitments.find(c=>c.id===linkedEmiId);
-     if(linked){payload.linkedCommitmentId=linkedEmiId;payload.commitmentApplied=true;}
-   }
-   if(!id && type==="expense" && linkedCardId){
-     const linked=creditCards.find(c=>c.id===linkedCardId);
-     if(linked){payload.linkedCreditCardId=linkedCardId;payload.creditCardApplied=true;}
+   const billCardId=$("txBillPaymentCard")?.value||"";
+   if(type==="expense" && method==="Credit card" && !linkedCardId) throw new Error("Select which credit card was used for this purchase.");
+   if(type==="cardPayment" && !billCardId) throw new Error("Select the credit card whose bill you are paying.");
+   if(type==="cardPayment" && !isBankMethod(method)) throw new Error("Credit card bill payment must use UPI, Auto debit, Bank transfer or Debit card from your Main Bank.");
+   if((type==="income"||type==="expense"||type==="emi"||type==="saving"||type==="cardPayment") && isBankMethod(method) && !bankAccounts.length) throw new Error("First save your Main Bank opening balance in the Credit Cards screen.");
+   const payload={date,type,category:formVal("txCategory"),amount,method,account:formVal("txAccount"),notes:formVal("txNotes")};
+   if(type==="emi"&&linkedEmiId){const linked=commitments.find(c=>c.id===linkedEmiId);if(linked){payload.linkedCommitmentId=linkedEmiId;payload.commitmentApplied=true;}}
+   if(type==="expense"&&method==="Credit card"){
+     const card=creditCards.find(c=>c.id===linkedCardId); if(!card) throw new Error("Selected credit card was not found.");
+     if(amount>cardAvailableBalance(card)) throw new Error(`Insufficient available limit on ${card.name}. Available: ${currency(cardAvailableBalance(card))}.`);
+     payload.linkedCreditCardId=linkedCardId;payload.cardImpactApplied=true;payload.cardImpactAmount=amount;payload.bankImpactApplied=false;payload.paymentFlow="credit_card_purchase";
+   } else if(type==="cardPayment"){
+     const card=creditCards.find(c=>c.id===billCardId); if(!card) throw new Error("Selected credit card was not found.");
+     if(amount>cardCurrentOutstanding(card)) throw new Error(`Payment exceeds ${card.name} outstanding ${currency(cardCurrentOutstanding(card))}.`);
+     payload.linkedCreditCardId=billCardId;payload.cardImpactApplied=true;payload.cardImpactAmount=-amount;payload.bankImpactApplied=true;payload.bankImpactAmount=-amount;payload.paymentFlow="credit_card_bill_payment";
+     if(!payload.category) payload.category=`Credit Card Bill Payment - ${card.name}`;
+   } else {
+     payload.bankImpactApplied=isBankMethod(method);
+     payload.bankImpactAmount=payload.bankImpactApplied?(type==="income"?amount:(type==="expense"||type==="emi"||type==="saving"?-amount:0)):0;
    }
    if(id){
-     const existing=transactions.find(t=>t.id===id)||{};
-     if(existing.linkedCommitmentId){payload.linkedCommitmentId=existing.linkedCommitmentId;payload.commitmentApplied=existing.commitmentApplied;}
-     if(existing.linkedCreditCardId){payload.linkedCreditCardId=existing.linkedCreditCardId;payload.creditCardApplied=existing.creditCardApplied;}
+const existing = transactions.find(t => t.id === id) || {};
+     if(existing.linkedCommitmentId&&!payload.linkedCommitmentId){payload.linkedCommitmentId=existing.linkedCommitmentId;payload.commitmentApplied=existing.commitmentApplied;}
      await saveRecord("transactions",id,payload);
    }else{
      const ref=await addDoc(path("transactions"),{...payload,createdAt:serverTimestamp(),updatedAt:serverTimestamp()});
-     if(payload.linkedCommitmentId){
-       const linked=commitments.find(c=>c.id===payload.linkedCommitmentId);
-       if(linked) await applyCommitmentPayment(linked,amount,payload.date,ref.id);
-     }
-     if(payload.linkedCreditCardId){
-       const linked=creditCards.find(c=>c.id===payload.linkedCreditCardId);
-       if(linked) await saveRecord("creditCards",linked.id,{outstanding:Math.max(0,Number(linked.outstanding||0)-amount),paidThisMonth:Number(linked.paidThisMonth||0)+amount,lastPaidDate:payload.date,dueDate:nextMonthDue({due:linked.dueDate||linked.nextDue},payload.date),nextDue:nextMonthDue({due:linked.dueDate||linked.nextDue},payload.date)});
-     }
+     if(payload.linkedCommitmentId){const linked=commitments.find(c=>c.id===payload.linkedCommitmentId);if(linked) await applyCommitmentPayment(linked,amount,date,ref.id);}
    }
-   clearTxForm(); await loadAll(); message("appMessage",id?"Transaction updated in cloud.":"Transaction saved to cloud.");
+   clearTxForm(); await loadAll(); message("appMessage",id?"Transaction updated. Account balances recalculated.":"Transaction saved. Main Bank / Credit Card balances updated separately.");
  } catch(err){message("appMessage",(err.code ? err.code + ": " : "") + err.message,true);}
- finally {
-  transactionSaving = false;
-  setBusy(
-    btn,
-    false,
-    $("transactionId").value ? "Update entry" : "Save Entry"
-  );
-}
+ finally { transactionSaving=false; setBusy(btn,false,$("transactionId").value?"Update entry":"Save Entry"); }
 });
 $("commitmentForm").addEventListener("submit",async e=>{e.preventDefault();try{const id=formVal("commitmentId");const old=commitments.find(c=>c.id===id)||{}; await saveRecord("commitments",id,{name:formVal("cName"),lender:formVal("cLender"),totalAmount:Number(formVal("cTotalAmount")||old.totalAmount||0),monthly:Number(formVal("cMonthly")),outstanding:Number(formVal("cOutstanding")),paidAmount:Number(old.paidAmount||Math.max(0,Number(old.totalAmount||0)-Number(old.outstanding||0))),start:formVal("cStart"),maturity:formVal("cMaturity"),due:formVal("cDue"),status:formVal("cStatus"),notes:formVal("cNotes")});clearCommitmentForm();await loadAll();message("appMessage","EMI / loan commitment saved.");}catch(err){message("appMessage",(err.code ? err.code + ": " : "") + err.message,true);}});
 
@@ -581,7 +716,7 @@ $("creditCardForm")?.addEventListener("submit",async e=>{
     const id=formVal("creditCardId"),old=creditCards.find(c=>c.id===id)||{};
     await saveRecord("creditCards",id,{
       name:formVal("ccName"),bank:formVal("ccBank"),
-      outstanding:Number(formVal("ccOutstanding")),
+      creditLimit:Number(formVal("ccCreditLimit")),outstanding:Number(formVal("ccOutstanding")),openingOutstanding:Number(formVal("ccOutstanding")),effectiveFrom:today(),baselineAtMs:Date.now(),
       monthlyPayment:Number(formVal("ccMonthlyPayment")||0),
       minimumDue:Number(formVal("ccMinimumDue")||0),
       dueDate:formVal("ccDueDate"),status:formVal("ccStatus"),
@@ -598,9 +733,22 @@ $("creditCardsBody")?.addEventListener("click",e=>{
   if(del)return removeRecord("creditCards",del.dataset.deleteCard,"credit card");
   if(edit){const c=creditCards.find(x=>x.id===edit.dataset.editCard);if(!c)return;
     $("creditCardId").value=c.id;
-    for(const [k,v] of Object.entries({ccName:c.name,ccBank:c.bank,ccOutstanding:c.outstanding,ccMonthlyPayment:c.monthlyPayment,ccMinimumDue:c.minimumDue,ccDueDate:c.dueDate||c.nextDue,ccStatus:c.status}))$(k).value=v??"";
+    for(const [k,v] of Object.entries({ccName:c.name,ccBank:c.bank,ccCreditLimit:c.creditLimit,ccOutstanding:cardCurrentOutstanding(c),ccMonthlyPayment:c.monthlyPayment,ccMinimumDue:c.minimumDue,ccDueDate:c.dueDate||c.nextDue,ccStatus:c.status}))$(k).value=v??"";
     $("cancelCreditCardBtn").classList.remove("hidden");
   }
+});
+$("mainBankForm")?.addEventListener("submit",async e=>{
+  e.preventDefault();
+  try{
+    const opening=Number(formVal("mainBankOpening"));
+    if(!Number.isFinite(opening)||opening<0) throw new Error("Enter a valid Main Bank balance.");
+    const existing=bankOpeningRecord();
+    const payload={accountType:"main",name:"Main Bank",openingBalance:opening,effectiveFrom:today(),baselineAtMs:Date.now(),updatedAt:serverTimestamp()};
+    if(existing?.id) await updateDoc(doc(db,"users",currentUser.uid,"bankAccounts",existing.id),payload);
+    else {payload.createdAt=serverTimestamp();await addDoc(path("bankAccounts"),payload);}
+    bankAccounts=(await getDocs(path("bankAccounts"))).docs.map(d=>({id:d.id,...d.data()}));
+    renderAll();message("appMessage",`Main Bank opening balance saved as ${currency(opening)}. New bank-linked entries will update it automatically.`);
+  }catch(err){message("appMessage","Could not save Main Bank balance: "+err.message,true);}
 });
 $("savingForm").addEventListener("submit",async e=>{e.preventDefault();try{const id=formVal("savingId");await saveRecord("savings",id,{name:formVal("sName"),provider:formVal("sProvider"),frequency:formVal("sFrequency"),contribution:Number(formVal("sContribution")),current:Number(formVal("sCurrent")),target:Number(formVal("sTarget")),start:formVal("sStart"),maturity:formVal("sMaturity")});clearSavingForm();await loadAll();message("appMessage","Savings scheme saved.");}catch(err){message("appMessage",(err.code ? err.code + ": " : "") + err.message,true);}});
 $("insuranceForm").addEventListener("submit",async e=>{e.preventDefault();try{const id=formVal("insuranceId");const old=insurances.find(i=>i.id===id)||{}; await saveRecord("insurances",id,{name:formVal("iName"),type:formVal("iType"),company:formVal("iCompany"),policy:formVal("iPolicy"),premium:Number(formVal("iPremium")),frequency:formVal("iFrequency"),coverage:Number(formVal("iCoverage")),start:formVal("iStart"),maturity:formVal("iMaturity"),paidAmount:Number(old.paidAmount||0),renewal:formVal("iRenewal"),status:formVal("iStatus"),notes:formVal("iNotes")});clearInsuranceForm();await loadAll();message("appMessage","Insurance policy saved.");}catch(err){message("appMessage",(err.code ? err.code + ": " : "") + err.message,true);}});
@@ -618,7 +766,7 @@ setText("sidebarEmail", currentUser?.email || "Your account");
 const now=new Date();
 setText("todayLabel", now.toLocaleDateString("en-IN",{weekday:"short",day:"2-digit",month:"short",year:"numeric"}));
 setText("clockLabel", now.toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"}));
-$("transactionsBody").addEventListener("click",async e=>{const edit=e.target.closest("[data-edit-tx]"),del=e.target.closest("[data-delete-tx]");if(del)return removeRecord("transactions",del.dataset.deleteTx,"transaction");if(edit){const t=transactions.find(x=>x.id===edit.dataset.editTx);if(!t)return;$("transactionId").value=t.id;for(const [k,v] of Object.entries({txDate:t.date,txType:t.type,txCategory:t.category,txAmount:t.amount,txMethod:t.method,txAccount:t.account,txNotes:t.notes}))$(k).value=v??"";$("saveTxBtn").textContent="Update entry";if($("txLinkedEmi"))$("txLinkedEmi").value=t.linkedCommitmentId||"";if($("txLinkedCreditCard"))$("txLinkedCreditCard").value=t.linkedCreditCardId||"";$("cancelTxBtn").classList.remove("hidden");window.scrollTo({top:0,behavior:"smooth"});}});
+$("transactionsBody").addEventListener("click",async e=>{const edit=e.target.closest("[data-edit-tx]"),del=e.target.closest("[data-delete-tx]");if(del)return removeRecord("transactions",del.dataset.deleteTx,"transaction");if(edit){const t=transactions.find(x=>x.id===edit.dataset.editTx);if(!t)return;$("transactionId").value=t.id;for(const [k,v] of Object.entries({txDate:t.date,txType:t.paymentFlow==="credit_card_bill_payment"?"cardPayment":t.type,txCategory:t.category,txAmount:t.amount,txMethod:t.method,txAccount:t.account,txNotes:t.notes}))$(k).value=v??"";$("saveTxBtn").textContent="Update entry";if($("txLinkedEmi"))$("txLinkedEmi").value=t.linkedCommitmentId||"";if($("txLinkedCreditCard"))$("txLinkedCreditCard").value=t.paymentFlow==="credit_card_purchase"?t.linkedCreditCardId||"":"";if($("txBillPaymentCard"))$("txBillPaymentCard").value=t.paymentFlow==="credit_card_bill_payment"?t.linkedCreditCardId||"":"";$("cancelTxBtn").classList.remove("hidden");toggleCreditCardFields();window.scrollTo({top:0,behavior:"smooth"});}});
 $("incomeBody").addEventListener("click", e=>handleTransactionAction(e));
 $("expensesBody").addEventListener("click", e=>handleTransactionAction(e));
 function handleTransactionAction(e){
@@ -627,8 +775,9 @@ function handleTransactionAction(e){
   if(edit){
     const t=transactions.find(x=>x.id===edit.dataset.editTx); if(!t)return;
     $("transactionId").value=t.id;
-    for(const [k,v] of Object.entries({txDate:t.date,txType:t.type,txCategory:t.category,txAmount:t.amount,txMethod:t.method,txAccount:t.account,txNotes:t.notes}))$(k).value=v??"";
-    $("saveTxBtn").textContent="Update entry";if($("txLinkedEmi"))$("txLinkedEmi").value=t.linkedCommitmentId||"";if($("txLinkedCreditCard"))$("txLinkedCreditCard").value=t.linkedCreditCardId||"";$("cancelTxBtn").classList.remove("hidden");
+    for(const [k,v] of Object.entries({txDate:t.date,txType:t.paymentFlow==="credit_card_bill_payment"?"cardPayment":t.type,txCategory:t.category,txAmount:t.amount,txMethod:t.method,txAccount:t.account,txNotes:t.notes}))$(k).value=v??"";
+    $("saveTxBtn").textContent="Update entry";if($("txLinkedEmi"))$("txLinkedEmi").value=t.linkedCommitmentId||"";if($("txLinkedCreditCard"))$("txLinkedCreditCard").value=t.paymentFlow==="credit_card_purchase"?t.linkedCreditCardId||"":"";if($("txBillPaymentCard"))$("txBillPaymentCard").value=t.paymentFlow==="credit_card_bill_payment"?t.linkedCreditCardId||"":"";$("cancelTxBtn").classList.remove("hidden");
+    toggleCreditCardFields();
     document.querySelectorAll(".side-link").forEach(b=>b.classList.toggle("active",b.dataset.tab==="entries"));
     document.querySelectorAll(".tab-panel").forEach(p=>p.classList.toggle("hidden",p.id!=="tab-entries"));
     window.scrollTo({top:0,behavior:"smooth"});
@@ -646,6 +795,15 @@ $("exportBtn").addEventListener("click",()=>{
  const csv=rows.map(r=>r.map(v=>`"${String(v??"").replace(/"/g,'""')}"`).join(",")).join("\r\n");
  const blob=new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8;"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=`sathish-family-finance-${today()}.csv`;a.click();URL.revokeObjectURL(url);
 });
+$("txType")?.addEventListener(
+    "change",
+    toggleCreditCardFields
+);
+
+$("txMethod")?.addEventListener(
+    "change",
+    toggleCreditCardFields
+);
 monthOptions();$("monthFilter").value=today().slice(0,7);$("txDate").value=today();
 if($("cStart"))$("cStart").value=today();
 if($("iStart"))$("iStart").value=today();

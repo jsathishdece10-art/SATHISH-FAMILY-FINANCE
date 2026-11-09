@@ -167,3 +167,19 @@ td.amount, .section-total strong, .saving-row-head b, .budget-item strong {
 #tab-credit-cards .panel-heading p{line-height:1.5}
 #tab-credit-cards .pill{white-space:nowrap}
 @media(max-width:700px){#tab-credit-cards .entry-form{grid-template-columns:1fr}}
+/* Separate bank and card balance presentation */
+.account-balance-strip{margin:0 0 16px}
+.main-bank-panel{margin:14px 0 16px;background:#fffdfb}
+.main-bank-panel .panel-heading>strong{font-family:Manrope,sans-serif;font-size:22px;color:#168454;white-space:nowrap}
+.main-bank-panel .entry-form{margin:0;padding:12px;background:transparent;border:0}
+.main-bank-panel .report-note{margin:0;padding:8px 12px;font-size:12px}
+@media(max-width:700px){.main-bank-panel .panel-heading{align-items:flex-start;flex-direction:column}.main-bank-panel .entry-form{padding:8px 0}}
+
+/* Dashboard: expandable per-card available limit breakdown */
+.dashboard-card-available{cursor:pointer;transition:border-color .15s,box-shadow .15s}
+.dashboard-card-available:hover,.dashboard-card-available:focus{outline:none;border-color:#e85a7e;box-shadow:0 5px 16px #d9446e18}
+.dashboard-card-available-details{margin-top:12px;padding-top:10px;border-top:1px solid #f0d8cc;display:grid;gap:8px}
+.dashboard-card-available-details.hidden{display:none!important}
+.dashboard-card-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;align-items:center;font-size:12px;color:#6e574d}
+.dashboard-card-row strong{color:#35190f;white-space:nowrap;font-size:13px}
+.dashboard-card-row small{grid-column:1/-1;color:#8a776f;font-size:11px}
